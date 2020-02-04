@@ -3,6 +3,7 @@
 #include <Wire.h>
 #include "PCF8575.h"
 
+#include "tpa2016.h"
 
 
 #include <Arduino.h>
@@ -24,12 +25,15 @@ AudioOutputI2SNoDAC *out;
 AudioFileSourceID3 *id3;
 
 
+
 #define pcf_addr B0100000
 #define tpa_addr B1011000
 
 int resetPin = D8;  //GPIO15 HOTWIRE
 int SDIO = D2;
 int SCLK = D1;
+
+tpa tpa;
 
 //Si4703_Breakout radio(resetPin, SDIO, SCLK);
 int channel = 947;
@@ -82,7 +86,7 @@ void setup()
 
 
   //SET UP TPA AMP
-  setAmpGain(amp_gain);
+  tpa.setGain(amp_gain);
   
 }
 
@@ -138,15 +142,15 @@ void loop()
           updateLED();
         }
         if(pcf_byte[1] & SW_UP_MASK){
-          amp_gain += 2;
+          amp_gain += 5;
           if (amp_gain > 30) amp_gain = 30;
-          setAmpGain(amp_gain);
+          tpa.setGain(amp_gain);
           Serial.println(amp_gain);
         }
         if(pcf_byte[1] & SW_DOWN_MASK){
-          amp_gain -= 2;
+          amp_gain -= 5;
           if (amp_gain < -28) amp_gain = -28;
-          setAmpGain(amp_gain);
+          tpa.setGain(amp_gain);
           Serial.println(amp_gain);
         }
     }
@@ -180,16 +184,4 @@ void displayInfo()
 {
    Serial.print("Channel:"); Serial.print(channel); 
    Serial.print(" Volume:"); Serial.println(volume); 
-}
-
-
-uint8_t setAmpGain(int8_t gain)
-{
-  if (gain > 30) gain = 30;
-  if (gain < -28) gain = -28;
-  
-  Wire.beginTransmission(tpa_addr);
-  Wire.write(0x05); //gain reg
-  Wire.write(gain); //set gain 
-  return (Wire.endTransmission());  //return 0 if ACK, 2 if NACK
 }
