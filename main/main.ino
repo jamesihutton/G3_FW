@@ -5,6 +5,10 @@
 
 #include "tpa2016.h"
 
+#include <SPI.h>
+#include <SD.h>
+File root;
+
 
 #include <Arduino.h>
 #ifdef ESP32
@@ -46,6 +50,63 @@ int8_t amp_gain = 0;
 PCF8575 pcf8575(pcf_addr,SDIO,SCLK);
 void displayInfo();
 
+String mp3_name[100];
+int mp3_count = 0;
+int mp3_index = 0;
+
+void listFiles()
+{
+  root = SD.open("/");
+  
+  int i = 0;
+  while(1)
+  {
+    File entry = root.openNextFile();
+     if (! entry) break;
+    String s = entry.name();
+    Serial.println(s);
+    //check if mp3 file
+    if ((s[s.length()-4] == '.') && (s[s.length()-3] == 'm') && (s[s.length()-2] == 'p') && (s[s.length()-1] == '3'))
+    {
+      mp3_name[i] = s;
+      i++;
+      if (i>=99) break;
+    }
+    entry.close();
+  }
+  mp3_count = i;
+  Serial.println();Serial.println();
+  Serial.print("MP3 COUNT: ");
+  Serial.println(i);
+  Serial.println();Serial.println();
+  for (int j = 0; j<i; j++)
+  {
+    Serial.println(mp3_name[j]);
+  }
+  
+
+}
+
+void init_mp3()
+{
+  
+  char s[50] = "";
+  for (int i = 0; i<50; i++)
+  {
+    s[i] = mp3_name[mp3_index][i];
+    if (!(mp3_name[mp3_index][i])) break;
+  }
+  Serial.print("PLAYING FILE: ");
+  Serial.println(s);
+  audioLogger = &Serial;
+  file = new AudioFileSourceSD(s);
+  id3 = new AudioFileSourceID3(file);
+  out = new AudioOutputI2SNoDAC();
+  mp3 = new AudioGeneratorMP3();
+  mp3->begin(id3,out);
+  out->SetGain(mp3_gain);
+}
+
 
 void setup()
 {
@@ -53,16 +114,12 @@ void setup()
 
   WiFi.mode(WIFI_OFF); 
   SD.begin(D0);
-  Serial.printf("Sample MP3 playback begins...\n");
 
-  audioLogger = &Serial;
-  file = new AudioFileSourceSD("genesis.mp3");
-  id3 = new AudioFileSourceID3(file);
-  //id3->RegisterMetadataCB(MDCallback, (void*)"ID3TAG");
-  out = new AudioOutputI2SNoDAC();
-  mp3 = new AudioGeneratorMP3();
-  mp3->begin(id3, out);
-  out->SetGain(mp3_gain);
+  listFiles();
+
+  init_mp3();
+  
+
   
 /*
   radio.powerOn();
