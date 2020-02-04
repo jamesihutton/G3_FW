@@ -86,7 +86,7 @@ void setup()
 
 
   //SET UP TPA AMP
-  tpa.setGain(amp_gain);
+  tpa.setGain(tpa.gain);
   
 }
 
@@ -142,16 +142,16 @@ void loop()
           updateLED();
         }
         if(pcf_byte[1] & SW_UP_MASK){
-          amp_gain += 5;
-          if (amp_gain > 30) amp_gain = 30;
-          tpa.setGain(amp_gain);
-          Serial.println(amp_gain);
+          tpa.gain += 5;
+          if (tpa.gain > 30) tpa.gain = 30;
+          tpa.setGain(tpa.gain);
+          Serial.println(tpa.gain);
         }
         if(pcf_byte[1] & SW_DOWN_MASK){
-          amp_gain -= 5;
-          if (amp_gain < -28) amp_gain = -28;
-          tpa.setGain(amp_gain);
-          Serial.println(amp_gain);
+          tpa.gain -= 5;
+          if (tpa.gain < -28) tpa.gain = -28;
+          tpa.setGain(tpa.gain);
+          Serial.println(tpa.gain);
         }
     }
     last_pcf_byte[1] = pcf_byte[1];
