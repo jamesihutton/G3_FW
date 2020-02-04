@@ -37,7 +37,7 @@ tpa tpa;
 
 //Si4703_Breakout radio(resetPin, SDIO, SCLK);
 int channel = 947;
-int volume = 10;
+int volume = 5;
 char rdsBuffer[10];
 
 float mp3_gain = 3.0;
@@ -72,6 +72,7 @@ void setup()
   updateLED();
   */
   // Set pinModes
+  
   pcf8575.pinMode(MUX_SEL, OUTPUT);       pcf8575.digitalWrite(MUX_SEL, LOW);
   pcf8575.pinMode(AMP_SHUTOFF, OUTPUT);   pcf8575.digitalWrite(AMP_SHUTOFF, LOW);
   pcf8575.pinMode(RADIO_SHUTOFF, OUTPUT); pcf8575.digitalWrite(RADIO_SHUTOFF, LOW);
@@ -81,6 +82,7 @@ void setup()
   pcf8575.pinMode(LED2, OUTPUT);   pcf8575.digitalWrite(LED2, LOW);
   pcf8575.pinMode(LED3, OUTPUT);   pcf8575.digitalWrite(LED3, LOW);
   pcf8575.pinMode(LED4, OUTPUT);   pcf8575.digitalWrite(LED4, LOW);
+  
   pcf8575.begin();
 
 
@@ -152,6 +154,10 @@ void loop()
           if (tpa.gain < -28) tpa.gain = -28;
           tpa.setGain(tpa.gain);
           Serial.println(tpa.gain);
+        }
+        if(pcf_byte[1] & SW_POW_MASK){
+          
+          
         }
     }
     last_pcf_byte[1] = pcf_byte[1];
