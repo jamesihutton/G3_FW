@@ -39,12 +39,12 @@ int SCLK = D1;
 
 tpa tpa;
 
-//Si4703_Breakout radio(resetPin, SDIO, SCLK);
+Si4703_Breakout radio(resetPin, SDIO, SCLK);
 int channel = 947;
 int volume = 5;
 char rdsBuffer[10];
 
-float mp3_gain = 3.0;
+float mp3_gain = 2.0;
 int8_t amp_gain = 0;
 
 PCF8575 pcf8575(pcf_addr,SDIO,SCLK);
@@ -53,6 +53,12 @@ void displayInfo();
 String mp3_name[100];
 int mp3_count = 0;
 int mp3_index = 0;
+
+bool mp3_initialized = 0;
+
+bool device_mode = 0; //0 = mp3, 1 = radio
+#define MP3_MODE 0
+#define RADIO_MODE 1
 
 void listFiles()
 {
@@ -89,7 +95,14 @@ void listFiles()
 
 void init_mp3()
 {
-  
+  Serial.print("init mp3 :");
+  Serial.println(mp3_name[mp3_index]);
+  if (mp3_initialized){
+    if (mp3->isRunning()) {
+      Serial.println("isRunning");
+      mp3->stop();
+    }
+  }
   char s[50] = "";
   for (int i = 0; i<50; i++)
   {
@@ -103,10 +116,38 @@ void init_mp3()
   id3 = new AudioFileSourceID3(file);
   out = new AudioOutputI2SNoDAC();
   mp3 = new AudioGeneratorMP3();
+  mp3_initialized = true; //raised forever after first init
   mp3->begin(id3,out);
   out->SetGain(mp3_gain);
 }
 
+void init_radio()
+{
+  radio.powerOn();
+  radio.setVolume(volume);
+  radio.setChannel(channel);
+  displayInfo();
+  updateLED();
+}
+
+void switch_mode_radio()
+{
+  if (mp3_initialized){
+    if (mp3->isRunning()) {    
+      mp3->stop();
+    }
+  }
+  init_radio();
+  
+  device_mode = RADIO_MODE;
+}
+
+void switch_mode_mp3()
+{
+  digitalWrite(resetPin,LOW); //put radio into reset mode (disable it)
+  init_mp3();
+  device_mode = MP3_MODE;
+}
 
 void setup()
 {
@@ -117,17 +158,16 @@ void setup()
 
   listFiles();
 
-  init_mp3();
+  if (device_mode == MP3_MODE) {
+    init_mp3();
+  } else if (device_mode == RADIO_MODE) {
+    init_radio();
+  }
   
 
+    
   
-/*
-  radio.powerOn();
-  radio.setVolume(volume);
-  radio.setChannel(channel);
-  displayInfo();
-  updateLED();
-  */
+  
   // Set pinModes
   
   pcf8575.pinMode(MUX_SEL, OUTPUT);       pcf8575.digitalWrite(MUX_SEL, LOW);
@@ -156,7 +196,7 @@ byte last_pcf_byte[2];
 void loop()
 {while(1){
 
-  delay(1);
+  delayMicroseconds(10);
   if (mp3->isRunning()) {
     if (!mp3->loop()) mp3->stop();
   }
@@ -177,43 +217,83 @@ void loop()
     
     if (pcf_byte[1] != last_pcf_byte[1]) {
         if(pcf_byte[1] & SW_VUP_MASK){
-          volume ++;
-          if (volume == 16) volume = 15;
-          //radio.setVolume(volume);
-          displayInfo();
-          updateLED();
+          if (device_mode == MP3_MODE) {
+            volume ++;
+            if (volume == 16) volume = 15;
+            tpa.setGain(map(volume,0,15,-28,30));
+            Serial.println(map(volume,0,15,-28,30));
+            updateLED();
+          } else if (device_mode == RADIO_MODE) {
+            volume ++;
+            if (volume == 16) volume = 15;
+            radio.setVolume(volume);
+            displayInfo();
+            updateLED();
+          }
+          
+          
         }
         if(pcf_byte[1] & SW_VDOWN_MASK){
-          volume --;
-          if (volume < 0) volume = 0;
-          //radio.setVolume(volume);
-          displayInfo();
-          updateLED();
+          if (device_mode == MP3_MODE) {
+            volume --;
+            if (volume < 0) volume = 0;     
+            tpa.setGain(map(volume,0,15,-28,30));
+            Serial.println(map(volume,0,15,-28,30));
+            updateLED();
+          } else if (device_mode == RADIO_MODE) {
+            volume --;
+            if (volume < 0) volume = 0;
+            radio.setVolume(volume);
+            displayInfo();
+            updateLED();
+          }
+          
         }
         if(pcf_byte[1] & SW_RIGHT_MASK){
-          //channel = radio.seekUp();
-          displayInfo();
-          updateLED();
+          if (device_mode == MP3_MODE) {
+            mp3_index++;
+            if (mp3_index >= (mp3_count)) mp3_index = 0;  //loop back to 0 after last song
+            init_mp3();
+          } else if (device_mode == RADIO_MODE) {
+            channel = radio.seekUp();
+            displayInfo();
+            updateLED();
+          }
+          
         }
         if(pcf_byte[1] & SW_LEFT_MASK){
-          //channel = radio.seekDown();
-          displayInfo();
-          updateLED();
+          if (device_mode == MP3_MODE) {
+            mp3_index--;
+            if (mp3_index < 0) mp3_index = mp3_count-1;  //loop to last song
+            init_mp3();
+          } else if (device_mode == RADIO_MODE) {
+            channel = radio.seekDown();
+            displayInfo();
+            updateLED();
+          }
+          
         }
         if(pcf_byte[1] & SW_UP_MASK){
-          tpa.gain += 5;
-          if (tpa.gain > 30) tpa.gain = 30;
-          tpa.setGain(tpa.gain);
-          Serial.println(tpa.gain);
+          if (device_mode == MP3_MODE) {
+            
+          } else if (device_mode == RADIO_MODE) {
+            
+          }
+          
         }
         if(pcf_byte[1] & SW_DOWN_MASK){
-          tpa.gain -= 5;
-          if (tpa.gain < -28) tpa.gain = -28;
-          tpa.setGain(tpa.gain);
-          Serial.println(tpa.gain);
+          if (device_mode == MP3_MODE) {
+            
+          } else if (device_mode == RADIO_MODE) {
+            
+          }
         }
         if(pcf_byte[1] & SW_POW_MASK){
-          
+          if (device_mode == MP3_MODE) {
+            switch_mode_radio();
+          } else if (device_mode == RADIO_MODE) {
+            switch_mode_mp3();
+          }
           
         }
     }
