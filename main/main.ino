@@ -7,6 +7,8 @@
 
 #include <SPI.h>
 #include <SD.h>
+
+#include "string.h"
 File root;
 
 
@@ -54,15 +56,54 @@ String mp3_name[100];
 int mp3_count = 0;
 int mp3_index = 0;
 
+String folder_name[70];
+int folder_count = 0;
+int folder_index = 0;
+
 bool mp3_initialized = 0;
 
 bool device_mode = 0; //0 = mp3, 1 = radio
 #define MP3_MODE 0
 #define RADIO_MODE 1
 
-void listFiles()
+void listFolders()
 {
   root = SD.open("/");
+  
+  int i = 0;
+  while(1)
+  {
+    File entry = root.openNextFile();
+     if (! entry) break;
+        
+    //check if folder
+    if (entry.isDirectory())
+    {
+      String s = entry.name();
+      if (!(s.equals("System Volume Information"))) {  //filter out "System Volume Information" file...
+        folder_name[i] = "/" + s + "/";
+        i++;
+        if (i>=99) break;
+      }
+    }
+    entry.close();
+  } 
+  folder_count = i;
+  Serial.println();Serial.println();
+  Serial.print("FOLDER COUNT: ");
+  Serial.println(i);
+  Serial.println();Serial.println();
+  for (int j = 0; j<i; j++)
+  {
+    Serial.println(folder_name[j]);
+  }
+  
+}
+
+
+void listFiles()
+{
+  root = SD.open(folder_name[folder_index]);
   
   int i = 0;
   while(1)
@@ -103,12 +144,22 @@ void init_mp3()
       mp3->stop();
     }
   }
-  char s[50] = "";
-  for (int i = 0; i<50; i++)
+  char s[100] = "";
+  
+  int i;
+  for (i = 0; i<100; i++)
   {
-    s[i] = mp3_name[mp3_index][i];
-    if (!(mp3_name[mp3_index][i])) break;
+    s[i] = folder_name[folder_index][i];
+    if (!(folder_name[folder_index][i])) break;
   }
+  int j = 0;
+  for (i = i; i<100; i++)
+  {
+    s[i] = mp3_name[mp3_index][j];
+    if (!(mp3_name[mp3_index][j])) break;
+    j++;
+  }
+  
   Serial.print("PLAYING FILE: ");
   Serial.println(s);
   audioLogger = &Serial;
@@ -155,7 +206,7 @@ void setup()
 
   WiFi.mode(WIFI_OFF); 
   SD.begin(D0);
-
+  listFolders();
   listFiles();
 
   if (device_mode == MP3_MODE) {
@@ -275,7 +326,11 @@ void loop()
         }
         if(pcf_byte[1] & SW_UP_MASK){
           if (device_mode == MP3_MODE) {
-            
+            folder_index --;
+            if (folder_index < 0) folder_index = folder_count-1;  //loop back to 0 after last folder
+            listFiles();
+            mp3_index = 0;
+            init_mp3();
           } else if (device_mode == RADIO_MODE) {
             
           }
@@ -283,7 +338,11 @@ void loop()
         }
         if(pcf_byte[1] & SW_DOWN_MASK){
           if (device_mode == MP3_MODE) {
-            
+            folder_index ++;
+            if (folder_index >= (folder_count)) folder_index = 0;  //loop back to 0 after last folder
+            listFiles();
+            mp3_index = 0;
+            init_mp3();
           } else if (device_mode == RADIO_MODE) {
             
           }
