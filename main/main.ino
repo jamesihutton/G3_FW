@@ -62,6 +62,9 @@ int folder_index = 0;
 
 bool mp3_initialized = 0;
 
+bool mp3_play = true;
+
+
 bool device_mode = 0; //0 = mp3, 1 = radio
 #define MP3_MODE 0
 #define RADIO_MODE 1
@@ -352,6 +355,19 @@ void loop()
             switch_mode_radio();
           } else if (device_mode == RADIO_MODE) {
             switch_mode_mp3();
+          } 
+        }
+        if(pcf_byte[1] & SW_PLAY_MASK){
+          if (device_mode == MP3_MODE) {
+            if (mp3_play){
+              mp3_play = false;
+              mp3->stop();
+            }else{
+              mp3_play = true;
+              //mp3->play();  ///does not work
+            }
+          } else if (device_mode == RADIO_MODE) {
+            radio.setVolume(0);
           }
           
         }
