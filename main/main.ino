@@ -251,8 +251,11 @@ void loop()
 {while(1){
 
   delayMicroseconds(10);
-  if (mp3->isRunning()) {
-    if (!mp3->loop()) mp3->stop();
+
+  if (mp3_play){
+    if (mp3->isRunning()) {
+      if (!mp3->loop()) mp3->stop();
+    }
   }
   
   ms = millis();
@@ -361,10 +364,11 @@ void loop()
           if (device_mode == MP3_MODE) {
             if (mp3_play){
               mp3_play = false;
-              mp3->stop();
+              
+              
             }else{
               mp3_play = true;
-              //mp3->play();  ///does not work
+              
             }
           } else if (device_mode == RADIO_MODE) {
             radio.setVolume(0);
