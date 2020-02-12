@@ -407,7 +407,7 @@ void loop()
     
     
     
-    
+    delay(1); //removing this makes the watchdog trip in radio mode....idk...reduce?  
   }  
 }}
 
@@ -427,21 +427,7 @@ void updateLED(){
     pcf8575.digitalWrite(LED4, 0);
   }
 }
-/*
-String bubbleSort(String s)
-{
-  String temp;
-  for (int j = 0; j < s.length(); j++){
-    for (int i = j+1; i<s.length(); i++){
-      if(s[i].compareTo(s[j]) < 0) {
-        temp = s[j];
-        s[j] = s[i];
-        s[i] = temp;
-      }
-    }
-  }
-}
-*/
+
 void displayInfo()
 {
    Serial.print("Channel:"); Serial.print(channel); 
