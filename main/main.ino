@@ -94,15 +94,42 @@ void listFolders()
     entry.close();
   } 
   folder_count = i;
-  Serial.println();Serial.println();
   Serial.print("FOLDER COUNT: ");
   Serial.println(i);
-  Serial.println();Serial.println();
-  for (int j = 0; j<i; j++)
-  {
-    Serial.println(folder_name[j]);
-  }
   
+  //BUBBLE SORT
+  //1. assign folders a number value
+  int fold_dec[folder_count];
+  
+  for (int i = 0; i<folder_count; i++){
+    //extract folder number into "fold_dec[i]"
+    if (isdigit(folder_name[i][1])){
+      fold_dec[i] = 0;
+      for (int x = 1; isdigit(folder_name[i][x]); x++){
+        fold_dec[i]*=10;
+        fold_dec[i]+=folder_name[i][x] - '0';
+      }
+    } else {
+      fold_dec[i] = 99; //stick any folder with no number at the end
+    }
+  }
+  //2. sort
+  String s_tmp;
+  int d_tmp, a = 0, j = 0;
+  for (a = 0; a<folder_count; a++){
+    for (j = 0; j < folder_count-a-1; j++){
+      if (fold_dec[j] > fold_dec[j+1]) {
+        //swap dec
+        d_tmp = fold_dec[j];
+        fold_dec[j] = fold_dec[j+1];
+        fold_dec[j+1] = d_tmp;
+        //swap string
+        s_tmp = folder_name[j];
+        folder_name[j] = folder_name[j+1];
+        folder_name[j+1] = s_tmp;
+      }
+    }
+  }
 }
 
 
@@ -116,7 +143,7 @@ void listFiles()
     File entry = root.openNextFile();
      if (! entry) break;
     String s = entry.name();
-    Serial.println(s);
+    //Serial.println(s);
     //check if mp3 file
     if ((s[s.length()-4] == '.') && (s[s.length()-3] == 'm') && (s[s.length()-2] == 'p') && (s[s.length()-1] == '3'))
     {
@@ -127,25 +154,12 @@ void listFiles()
     entry.close();
   }
   mp3_count = i;
-  Serial.println();Serial.println();
-  Serial.print("MP3 COUNT: ");
-  Serial.println(i);
-  Serial.println();Serial.println();
-  for (int j = 0; j<i; j++)
-  {
-    Serial.println(mp3_name[j]);
-  }
-  
-
 }
 
 void init_mp3()
 {
-  Serial.print("init mp3 :");
-  Serial.println(mp3_name[mp3_index]);
   if (mp3_initialized){
     if (mp3->isRunning()) {
-      Serial.println("isRunning");
       mp3->stop();
     }
   }
@@ -413,7 +427,21 @@ void updateLED(){
     pcf8575.digitalWrite(LED4, 0);
   }
 }
-
+/*
+String bubbleSort(String s)
+{
+  String temp;
+  for (int j = 0; j < s.length(); j++){
+    for (int i = j+1; i<s.length(); i++){
+      if(s[i].compareTo(s[j]) < 0) {
+        temp = s[j];
+        s[j] = s[i];
+        s[i] = temp;
+      }
+    }
+  }
+}
+*/
 void displayInfo()
 {
    Serial.print("Channel:"); Serial.print(channel); 
