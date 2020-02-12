@@ -34,6 +34,7 @@ AudioFileSourceID3 *id3;
 
 #define pcf_addr B0100000
 #define tpa_addr B1011000
+#define fm_addr  0x10 
 
 int resetPin = D8;  //GPIO15 HOTWIRE
 int SDIO = D2;
@@ -60,14 +61,15 @@ String folder_name[70];
 int folder_count = 0;
 int folder_index = 0;
 
-bool mp3_initialized = 0;
+bool mp3_initialized = 0; //only happens first time
 
 bool mp3_play = true;
 
 
-bool device_mode = 0; //0 = mp3, 1 = radio
+
 #define MP3_MODE 0
 #define RADIO_MODE 1
+bool device_mode = MP3_MODE;
 
 void listFolders()
 {
@@ -254,7 +256,11 @@ void loop()
 
   if (mp3_play){
     if (mp3->isRunning()) {
-      if (!mp3->loop()) mp3->stop();
+      if (!mp3->loop()) { //play next file 
+        mp3_index++; 
+        if (mp3_index >= (mp3_count)) mp3_index = 0;  //loop back to 0 after last song 
+        init_mp3();
+      }
     }
   }
   
@@ -312,9 +318,10 @@ void loop()
             if (mp3_index >= (mp3_count)) mp3_index = 0;  //loop back to 0 after last song
             init_mp3();
           } else if (device_mode == RADIO_MODE) {
-            channel = radio.seekUp();
+            channel+=2; 
+            if (channel > 1079) channel = 879;
+            radio.setChannel(channel);
             displayInfo();
-            updateLED();
           }
           
         }
@@ -324,9 +331,10 @@ void loop()
             if (mp3_index < 0) mp3_index = mp3_count-1;  //loop to last song
             init_mp3();
           } else if (device_mode == RADIO_MODE) {
-            channel = radio.seekDown();
+            channel-=2; 
+            if (channel < 879) channel = 1079;
+            radio.setChannel(channel);
             displayInfo();
-            updateLED();
           }
           
         }
@@ -338,7 +346,9 @@ void loop()
             mp3_index = 0;
             init_mp3();
           } else if (device_mode == RADIO_MODE) {
-            
+            channel = radio.seekUp();
+            displayInfo();
+            updateLED();
           }
           
         }
@@ -350,7 +360,9 @@ void loop()
             mp3_index = 0;
             init_mp3();
           } else if (device_mode == RADIO_MODE) {
-            
+            channel = radio.seekDown();
+            displayInfo();
+            updateLED();
           }
         }
         if(pcf_byte[1] & SW_POW_MASK){
@@ -381,7 +393,7 @@ void loop()
     
     
     
-    delay(1);
+    
   }  
 }}
 
