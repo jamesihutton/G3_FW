@@ -36,7 +36,7 @@ AudioFileSourceID3 *id3;
 #define tpa_addr B1011000
 #define fm_addr  0x10 
 
-int resetPin = D8;  //GPIO15 HOTWIRE
+int resetPin = D0;  //GPIO16 HOTWIRE
 int SDIO = D2;
 int SCLK = D1;
 
