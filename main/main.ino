@@ -224,6 +224,11 @@ void setup()
   Serial.begin(9600);
 
   WiFi.mode(WIFI_OFF); 
+  WiFi.forceSleepBegin();
+  
+  
+
+  
   SD.begin(D0);
   listFolders();
   listFiles();
