@@ -7,6 +7,8 @@
 
 #include <SPI.h>
 #include <SD.h>
+// You may need a fast SD card. Set this as high as it will work (40MHz max).
+//#define SPI_SPEED   SD_SCK_MHZ(40)
 
 #include "string.h"
 File root;
@@ -19,15 +21,40 @@ File root;
 #else
   #include <ESP8266WiFi.h>
 #endif
+
+const bool WiFiEnabled = false;
+
+
+  WiFiServer server(80);
+  // Variable to store the HTTP request
+  String header;
+  // Decode HTTP GET value
+  String valueString = String(5);
+  int pos1 = 0;
+  int pos2 = 0;
+
+//const char* ssid = "FBI Van 003";
+//const char* password = "qwertyuiop";
+
+//const char* ssid = "Hope-Bible";
+//const char* password = "Th@nk.You1000!";
+
+//const char* ssid = "Galcom Guests";
+//const char* password = "GoodGoodTea";
+
+const char* ssid = "Galcom Staff";
+const char* password = "RadioActiveLifeChangingMedia";
+
+
 #include "AudioFileSourceSD.h"
 #include "AudioFileSourceSPIFFS.h"
 #include "AudioFileSourceID3.h"
 #include "AudioGeneratorMP3.h"
-#include "AudioOutputI2SNoDAC.h"
+#include "AudioOutputI2S.h"
 
 AudioGeneratorMP3 *mp3;
 AudioFileSourceSD *file;
-AudioOutputI2SNoDAC *out;
+AudioOutputI2S *out;
 AudioFileSourceID3 *id3;
 
 
@@ -47,7 +74,7 @@ int channel = 947;
 int volume = 5;
 char rdsBuffer[10];
 
-float mp3_gain = 2.0;
+float mp3_gain = 0.5;
 int8_t amp_gain = 0;
 
 PCF8575 pcf8575(pcf_addr,SDIO,SCLK);
@@ -181,10 +208,10 @@ void init_mp3()
   
   Serial.print("PLAYING FILE: ");
   Serial.println(s);
-  audioLogger = &Serial;
+  audioLogger = &Serial;  //not needed
   file = new AudioFileSourceSD(s);
   id3 = new AudioFileSourceID3(file);
-  out = new AudioOutputI2SNoDAC();
+  out = new AudioOutputI2S();
   mp3 = new AudioGeneratorMP3();
   mp3_initialized = true; //raised forever after first init
   mp3->begin(id3,out);
@@ -219,15 +246,144 @@ void switch_mode_mp3()
   device_mode = MP3_MODE;
 }
 
+void init_server()
+{
+  // Connect to Wi-Fi network with SSID and password
+  Serial.println();
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+ 
+  WiFi.begin(ssid, password);
+  int counter = 0;
+  bool fail_connect = false;
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(100);
+    Serial.print(".");
+    counter++;
+    if(counter>80) {  //timeout after 8 seconds
+      Serial.println();
+      Serial.println("could not connect...");
+      return;
+    }
+  }
+  
+  Serial.println("");
+  Serial.println("WiFi connected");
+ 
+  // Start the server
+  server.begin();
+  Serial.println("Server started");
+ 
+  // Print the IP address
+  Serial.print("Use this URL to connect: ");
+  Serial.print("http://");
+  Serial.print(WiFi.localIP());
+  Serial.println("/");
+}
+
+void server_tick()
+{
+  WiFiClient client = server.available();   // Listen for incoming clients
+
+  if (client) {                             // If a new client connects,
+    //Serial.println("New Client.");          // print a message out in the serial port
+    String currentLine = "";                // make a String to hold incoming data from the client
+    while (client.connected()) {            // loop while the client's connected
+      if (client.available()) {             // if there's bytes to read from the client,
+        char c = client.read();             // read a byte, then
+        //Serial.write(c);                    // print it out the serial monitor
+        header += c;
+        if (c == '\n') {                    // if the byte is a newline character
+          // if the current line is blank, you got two newline characters in a row.
+          // that's the end of the client HTTP request, so send a response:
+          if (currentLine.length() == 0) {
+            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
+            // and a content-type so the client knows what's coming, then a blank line:
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-type:text/html");
+            client.println("Connection: close");
+            client.println();
+
+            // Display the HTML web page
+            client.println("<!DOCTYPE html><html>");
+            client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+            client.println("<link rel=\"icon\" href=\"data:,\">");
+            // CSS to style the on/off buttons 
+            // Feel free to change the background-color and font-size attributes to fit your preferences
+            client.println("<style>body { text-align: center; font-family: \"Trebuchet MS\", Arial; margin-left:auto; margin-right:auto;}");
+            client.println(".slider { width: 300px; }</style>");
+            client.println("<script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js\"></script>");
+                     
+            // Web Page
+            client.println("</head><body><h1>RADIO VOLUME CONTROL</h1>");
+            client.println("<p>Volume: <span id=\"servoPos\"></span></p>");          
+            client.println("<input type=\"range\" min=\"0\" max=\"15\" class=\"slider\" id=\"servoSlider\" onchange=\"servo(this.value)\" value=\""+valueString+"\"/>");
+            
+            client.println("<script>var slider = document.getElementById(\"servoSlider\");");
+            client.println("var servoP = document.getElementById(\"servoPos\"); servoP.innerHTML = slider.value;");
+            client.println("slider.oninput = function() { slider.value = this.value; servoP.innerHTML = this.value; }");
+            client.println("$.ajaxSetup({timeout:1000}); function servo(pos) { ");
+            client.println("$.get(\"/?value=\" + pos + \"&\"); {Connection: close};}</script>");
+           
+            client.println("</body></html>");     
+            
+            //GET /?value=180& HTTP/1.1
+            if(header.indexOf("GET /?value=")>=0) {
+              pos1 = header.indexOf('=');
+              pos2 = header.indexOf('&');
+              valueString = header.substring(pos1+1, pos2);
+              
+              //SET VOLUME
+              int val = valueString.toInt();
+              volume = val;
+              if (device_mode == MP3_MODE) { 
+                tpa.setGain(map(volume,0,15,-28,30));
+                Serial.println(volume);
+                updateLED();
+              } else if (device_mode == RADIO_MODE) {
+                radio.setVolume(volume);
+                Serial.println(volume);
+                updateLED();
+              }
+              
+              
+            }         
+            // The HTTP response ends with another blank line
+            client.println();
+            // Break out of the while loop
+            break;
+          } else { // if you got a newline, then clear currentLine
+            currentLine = "";
+          }
+        } else if (c != '\r') {  // if you got anything else but a carriage return character,
+          currentLine += c;      // add it to the end of the currentLine
+        }
+      }
+    }
+    // Clear the header variable
+    header = "";
+    // Close the connection
+    client.stop();
+    Serial.println("Client disconnected.");
+    Serial.println("");
+  }
+}
+
+
+
 void setup()
 {
   Serial.begin(9600);
 
-  WiFi.mode(WIFI_OFF); 
-  WiFi.forceSleepBegin();
-  
-  
+                                                                       
 
+  if (WiFiEnabled) {
+    init_server();
+  } else {
+    WiFi.mode(WIFI_OFF); 
+    WiFi.forceSleepBegin(); //<-- saves like 100mA!
+  }
   
   SD.begin(D0);
   listFolders();
@@ -288,10 +444,17 @@ void loop()
   last_ms = ms;
 
   
+  if (!(ms%20)){
+
+
+    if (WiFiEnabled) server_tick();
+    
+  }
 
   if (!(ms%50)){
-    
-    
+
+                                                         
+    /*    
     Wire.requestFrom(pcf_addr,2);
     
     pcf_byte[0] = Wire.read(); pcf_byte[1] = Wire.read();
@@ -302,8 +465,9 @@ void loop()
           if (device_mode == MP3_MODE) {
             volume ++;
             if (volume == 16) volume = 15;
-            tpa.setGain(map(volume,0,15,-28,30));
-            Serial.println(map(volume,0,15,-28,30));
+            mp3_gain = ((volume*volume*volume)/1000.0)+(volume/30.0);
+            out->SetGain(mp3_gain);
+            Serial.print(volume); Serial.print(" ("); Serial.print(mp3_gain); Serial.println(")");
             updateLED();
           } else if (device_mode == RADIO_MODE) {
             volume ++;
@@ -319,8 +483,10 @@ void loop()
           if (device_mode == MP3_MODE) {
             volume --;
             if (volume < 0) volume = 0;     
-            tpa.setGain(map(volume,0,15,-28,30));
-            Serial.println(map(volume,0,15,-28,30));
+            mp3_gain = ((volume*volume*volume)/1000.0)+(volume/30.0);
+            out->SetGain(mp3_gain);
+            Serial.print(volume); Serial.print(" ("); Serial.print(mp3_gain); Serial.println(")");
+            updateLED();
             updateLED();
           } else if (device_mode == RADIO_MODE) {
             volume --;
