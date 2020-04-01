@@ -15,10 +15,8 @@ File root;
 
 
 //////////////////////////////////////////////////////////////////////////////
-#include <SparkFunSX1509.h> // Include SX1509 library
-
-// SX1509 I2C address (set by ADDR1 and ADDR0 (00 by default):
-const byte SX1509_ADDRESS = 0x3E;  // SX1509 I2C address
+#include <Wire.h>
+#include "compass_io.h" // Include SX1509 library
 SX1509 io; // Create an SX1509 object to be used throughout
 //////////////////////////////////////////////////////////////////////////////
 
@@ -237,10 +235,7 @@ void switch_mode_mp3()
 void latchPower() 
 { 
    //latch power 
-  Wire.beginTransmission(SX1509_ADDRESS); 
-  Wire.write(0x1E);  
-  Wire.write(B01011111);         //set internal osc, set OSCIO to output, and HIGH    ///THIS KEEPS SUICIDE CIRCUIT ENABLED 
-  Wire.endTransmission(); 
+  io.OSCIO_set(HIGH);
   Serial.println("power latched"); 
 } 
 
@@ -249,66 +244,20 @@ void powerDown()
 { 
   Serial.println("turning off power..."); 
        
-  io.digitalWrite(LED1, HIGH); io.pinMode(LED1, INPUT);  //this is only temporary for Proto3 board, cuz the LEDs are connected to VBAT with hotwire...
-  io.digitalWrite(LED2, HIGH); io.pinMode(LED2, INPUT);  
-  io.digitalWrite(LED3, HIGH); io.pinMode(LED3, INPUT);  
-  io.digitalWrite(LED4, HIGH); io.pinMode(LED4, INPUT);  
-
-  Wire.beginTransmission(SX1509_ADDRESS); 
-  Wire.write(0x1E);  
-  Wire.write(B01010000);         //set internal osc, set OSCIO to output, and LOW    ///THIS TURNS OF POWER TO ESP AND ALL PERIPHERALS
-  Wire.endTransmission();
-  
-  delay(2000);  //wait for suicide circuit cap to empty 
-  Serial.println("this line should never be reached..."); 
+  io.OSCIO_set(LOW);
 } 
 
-bool init_io()
-{
-  if (!io.begin(SX1509_ADDRESS))
-  {
-    
-    Serial.println("Failed to connect to SX1509...");
-    return 0;
-  }
 
-  latchPower();
-
-  //init the rest of the IO 
-  io.pinMode(MUX_SEL, OUTPUT);  io.digitalWrite(MUX_SEL, LOW);    //*****This will set MUX_SEL high for 2ms and then low again. Therefore LPF in circuit is needed to remove, and stop FTDI from reseting ESP in a loop
-  io.pinMode(USB_SD_RST, OUTPUT); io.digitalWrite(USB_SD_RST, HIGH);    
-  io.pinMode(SW_MODE, INPUT); 
-  io.pinMode(SW_Q, INPUT); 
-  io.pinMode(LED1, OUTPUT); io.digitalWrite(LED1, LOW); 
-  io.pinMode(LED2, OUTPUT); io.digitalWrite(LED2, LOW);
-  io.pinMode(LED3, OUTPUT); io.digitalWrite(LED3, LOW);
-  io.pinMode(LED4, OUTPUT); io.digitalWrite(LED4, LOW);
-  io.pinMode(SW_VDOWN, INPUT); 
-  io.pinMode(SW_VUP, INPUT); 
-  io.pinMode(SW_DOWN, INPUT); 
-  io.pinMode(SW_UP, INPUT); 
-  io.pinMode(SW_RIGHT, INPUT); 
-  io.pinMode(SW_LEFT, INPUT); 
-  io.pinMode(SW_PLAY, INPUT);  
-  io.pinMode(SW_POW, INPUT); 
-
-
-
-  Serial.println("IO Initialized");
-  //wait for power to be released
-  while(io.digitalRead(SW_POW)) {delay(100);} //don't proceed until user releases power button
-
-  return 1; //success
-  
-}
 
 void setup()
 {
   Serial.begin(9600); Serial.println(); Serial.println("boot"); 
   delay(100);
   // Set pinModes
-  init_io();                                                                      
+  io.init();                                                                      
 
+  latchPower();
+  
 
   WiFi.mode(WIFI_OFF); 
   WiFi.forceSleepBegin(); //<-- saves like 100mA!
@@ -331,24 +280,18 @@ void setup()
   }
   
 
-    
-  
-  
-  
-  
-
-
 
   updateLED();
 }
 
 int ms = 0;
 int last_ms = 0;
-
+uint16_t switch_states = 0;
+uint16_t switch_states_last = 1;
 void loop()
 {while(1){
 
-  //delayMicroseconds(10);
+  delayMicroseconds(10);
 
   if (mp3_play){
     if (mp3->isRunning()) {
@@ -368,8 +311,8 @@ void loop()
   if (!(ms%50)){
 
                                                 
-    
-    if (1) {
+    switch_states = io.update_pinData();    //this must be called before reading any pins! (reads them all at once in one command...)
+    if (switch_states != switch_states_last) {
         if(io.digitalRead(SW_VUP)){
           if (device_mode == MP3_MODE) {
             volume ++;
@@ -491,7 +434,7 @@ void loop()
         
     
     
-    
+    switch_states_last = switch_states;
     
     delay(1); //removing this makes the watchdog trip in radio mode....idk...reduce?  
   }}  
