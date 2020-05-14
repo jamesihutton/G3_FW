@@ -1,8 +1,5 @@
 #include <SparkFunSi4703.h>
 
-#include <Wire.h>
-
-
 
 
 #include <SPI.h>
@@ -57,11 +54,11 @@ char rdsBuffer[10];
 
 #define MP3_MAX_GAIN    1.0
 #define MAX_VOLUME      15    //used for both Radio and MP3 volume!
-float mp3_gain = 0.5;     //starting level
+float mp3_gain = 0.2;     //starting level
 
 
 
-void displayInfo();
+
 
 String mp3_name[100];
 int mp3_count = 0;
@@ -74,6 +71,7 @@ int folder_index = 0;
 bool mp3_initialized = 0; //only happens first time
 
 bool mp3_play = true;
+bool radio_play = false;
 
 
 
@@ -199,6 +197,8 @@ void init_mp3()
   mp3_initialized = true; //raised forever after first init
   mp3->begin(id3,out);
   out->SetGain(mp3_gain);
+  Serial.print("gain = ");
+  Serial.println(mp3_gain);
 }
 
 void init_radio()
@@ -217,9 +217,11 @@ void switch_mode_radio()
       mp3->stop();
     }
   }
-  init_radio();
   
+  init_radio();
+  mp3_play = false;
   device_mode = RADIO_MODE;
+
 }
 
 void switch_mode_mp3()
@@ -257,7 +259,13 @@ void setup()
   io.init();                                                                      
 
   latchPower();
+
   
+  io.update_pinData();
+  while(io.digitalRead(SW_POW)){  //wait until user releases SW_POW to proceed
+    io.update_pinData();
+    delay(100);    
+  }
 
   WiFi.mode(WIFI_OFF); 
   WiFi.forceSleepBegin(); //<-- saves like 100mA!
@@ -277,6 +285,7 @@ void setup()
     init_mp3();
   } else if (device_mode == RADIO_MODE) {
     init_radio();
+    Serial.println("radio inited");
   }
   
 
@@ -290,8 +299,8 @@ uint16_t switch_states = 0;
 uint16_t switch_states_last = 1;
 void loop()
 {while(1){
-
-  delayMicroseconds(10);
+  ESP.wdtFeed();
+  //delay(2);
 
   if (mp3_play){
     if (mp3->isRunning()) {
@@ -300,7 +309,7 @@ void loop()
         if (mp3_index >= (mp3_count)) mp3_index = 0;  //loop back to 0 after last song 
         init_mp3();
       }
-    }
+    } else {init_mp3();}
   }
   
   ms = millis();
@@ -309,8 +318,7 @@ void loop()
 
 
   if (!(ms%50)){
-
-                                                
+                                               
     switch_states = io.update_pinData();    //this must be called before reading any pins! (reads them all at once in one command...)
     if (switch_states != switch_states_last) {
         if(io.digitalRead(SW_VUP)){
@@ -407,6 +415,7 @@ void loop()
           } else if (device_mode == RADIO_MODE) {
             switch_mode_mp3();
           } 
+          Serial.println(device_mode);
         }
         if(io.digitalRead(SW_PLAY)){
           if (device_mode == MP3_MODE) {
@@ -419,7 +428,13 @@ void loop()
               
             }
           } else if (device_mode == RADIO_MODE) {
-            radio.setVolume(0);
+            if (radio_play){
+              radio.setVolume(0);
+              radio_play = false;
+            } else {
+              radio.setVolume(volume);
+              radio_play = true;
+            }
           }
           
         }
@@ -436,14 +451,18 @@ void loop()
     
     switch_states_last = switch_states;
     
-    delay(1); //removing this makes the watchdog trip in radio mode....idk...reduce?  
+    //delay(1); //removing this makes the watchdog trip in radio mode....idk...reduce?  
   }}  
 }}
 
 //never leaves this function
 void readSD()
 {
-  while(!io.digitalRead(SW_Q))  delay(100); //wait for switch to be released before proceeding
+  io.update_pinData();
+  while(io.digitalRead(SW_Q)){  //wait until user releases SW_Q to proceed
+    io.update_pinData();
+    delay(100);    
+  }
   
   Serial.println("switching to SD card...");
 
@@ -462,7 +481,8 @@ void readSD()
 
   //loop until SW_POW is pressed (should reset ESP though when MUX_SEL goes low and triggers FTDI...)
   while(1){
-    delay(50);
+    delay(100);
+    io.update_pinData();
     if (io.digitalRead(SW_Q)){
       io.digitalWrite(MUX_SEL, LOW);    //this will reset the ESP...
       //RESET SD card and SD reader

@@ -35,6 +35,15 @@ bool SX1509::init(void)
 	Wire.write(pinDir >> 8);         
 	Wire.write(pinDir & 0xFF);         
 	Wire.endTransmission();
+  Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.println(pinDir & 0xFF, BIN);
+
+  //enable pulldowns on inputs
+  Wire.beginTransmission(SX1509_ADDR);
+  Wire.write(0x08); 
+  Wire.write(pinDir >> 8);         
+  Wire.write(pinDir & 0xFF);         
+  Wire.endTransmission();
+  Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.println(pinDir & 0xFF, BIN);
 	
 	//SET  RegDataB and RegDataA 
 	Wire.beginTransmission(SX1509_ADDR);
@@ -90,8 +99,8 @@ void SX1509::reset(void)
 bool SX1509::pinMode(uint16_t pin, bool dir)
 {
 	//note! dir for SX1509 is opposite to arduino's OUTPUT and INPUT defines! 
-	// 0 = SX1509 OUTPUT, 1 = SX1509 INPUT
-		
+	// 0 = SX1509 OUTPUT, 1 = SX1509 INPUT (PULL DOWN)
+	int resp = 0;
 	pinDir = (pinDir & ~(1<<pin)) | dir<<pin;	//update bit in pinState
 	
 	//SET RegDirB and RegDirA (pinModes)
@@ -99,8 +108,21 @@ bool SX1509::pinMode(uint16_t pin, bool dir)
 	Wire.write(0x0E); 
 	Wire.write(pinDir >> 8);         
 	Wire.write(pinDir & 0xFF);         
-	if(!Wire.endTransmission())	return 1;		//success
-	else return 0;
+	if(!Wire.endTransmission()) resp = 1;   //success
+
+ Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.print(pinDir & 0xFF, BIN);
+
+  //If input, set to pull-downs to avoid need for resistors on PCB 
+  if (dir == 1) {
+    Wire.beginTransmission(SX1509_ADDR);
+    Wire.write(0x08); 
+    Wire.write(pinDir >> 8);         //these regs should match pinDir reg, since INPUT = 1, and pulldown = 1
+    Wire.write(pinDir & 0xFF);         
+    if(!Wire.endTransmission()) resp = 1;   //success
+    Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.print(pinDir & 0xFF, BIN);
+  }
+	
+	return resp;
 }
 
 bool SX1509::get_pinMode(uint16_t pin)
