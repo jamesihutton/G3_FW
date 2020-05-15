@@ -1,5 +1,8 @@
 
 #include "main.h"
+#include "compass.h" 
+#include "compass_io.h" 
+
 #include "SparkFunSi4703.h"
 
 //x
