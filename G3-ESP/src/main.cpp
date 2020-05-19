@@ -2,10 +2,11 @@
 #include "main.h"
 #include "compass.h" 
 #include "compass_io.h" 
+#include "compass_nonVols.h"
 
 #include "SparkFunSi4703.h"
 
-//x
+
 
 
 #include <SPI.h>
@@ -60,7 +61,7 @@ char rdsBuffer[10];
 
 #define MP3_MAX_GAIN    1.0
 #define MAX_VOLUME      15    //used for both Radio and MP3 volume!
-float mp3_gain = 0.2;     //starting level
+float mp3_gain = 0.3;     //starting level
 
 
 
@@ -194,7 +195,7 @@ void init_mp3()
   }
 
   Serial.print("PLAYING FILE: ");
-  Serial.println(s);
+  Serial.print(s);
   audioLogger = &Serial;  //not needed
   file = new AudioFileSourceSD(s);
   id3 = new AudioFileSourceID3(file);
@@ -202,6 +203,8 @@ void init_mp3()
   mp3 = new AudioGeneratorMP3();
   mp3_initialized = true; //raised forever after first init
   mp3->begin(id3,out);
+  Serial.print("\t\t@"); Serial.println(nonVol[TRACKPOS]);
+  file->seek(nonVol[TRACKPOS], SEEK_SET);
   out->SetGain(mp3_gain);
   Serial.print("gain = ");
   Serial.println(mp3_gain);
@@ -283,6 +286,9 @@ void setup()
 
   SD.begin(D0);
 
+  //UPDATE NONVOLS
+  SPIFFS.begin();
+  get_nonVols();
 
   listFolders();
   listFiles();
@@ -447,9 +453,13 @@ void loop()
 
         if(io.digitalRead(SW_Q)){
           readSD();
+          //Serial.println(file ->getPos());
+          
         }
 
         if(io.digitalRead(SW_POW)){
+          updateTrackPos();
+          set_nonVols();
           powerDown();
         }
 
@@ -528,4 +538,9 @@ void displayInfo()
 float mapf(float x, float in_min, float in_max, float out_min, float out_max)
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+void updateTrackPos()
+{
+  nonVol[TRACKPOS] = file->getPos();
 }
