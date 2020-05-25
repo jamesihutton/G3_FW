@@ -343,8 +343,17 @@ void setup()
     
 
   //UPDATE NONVOLS
-  SPIFFS.begin();
- // SPIFFS.format();    //<--- ONLY NEED TO DO THIS ONCE PER DEVICE
+  //Initialize File System
+  if(SPIFFS.begin())  Serial.println("SPIFFS Initialize....ok");
+  else                Serial.println("SPIFFS Initialization...failed");
+ 
+  //Format File System
+  /*
+  if(SPIFFS.format()) Serial.println("File System Formated");
+  else                Serial.println("File System Formatting Error");
+  while(1){Serial.println("done"); delay(1000);}
+  */
+
   nv.get_nonVols();
 
   listFolders();
