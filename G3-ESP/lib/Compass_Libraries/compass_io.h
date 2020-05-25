@@ -37,7 +37,7 @@
 
 
 #define			DEFAULT_PINDIR		0b1111111100001100			//set pins 0,1,4,5,6,7 as outputs
-#define			DEFAULT_PINSTATE	0b0000000000000010			//LEDs all on (LOW), USB_SD_RST (HIGH), MUX_SEL (LOW)
+#define			DEFAULT_PINSTATE	0b0000000000000010			//LEDs all on (LOW), !USB_SD_RAD_RST (HIGH), MUX_SEL (LOW)
 
 
 class SX1509
@@ -51,7 +51,7 @@ public:
 	uint16_t pinData;										//data of input pins
 	
 	bool init(void);
-	bool OSCIO_set(bool state);								//the extra GPO pin used for the compass suicide circuit
+	bool OSCIO_set(bool state);								//the extra GPO pin used for the compass latch circuit
 	void reset(void);
 	
 	bool pinMode(uint16_t pin, bool dir);

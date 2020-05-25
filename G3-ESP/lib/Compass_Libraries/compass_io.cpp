@@ -35,15 +35,15 @@ bool SX1509::init(void)
 	Wire.write(pinDir >> 8);         
 	Wire.write(pinDir & 0xFF);         
 	Wire.endTransmission();
-  Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.println(pinDir & 0xFF, BIN);
+	Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.println(pinDir & 0xFF, BIN);
 
-  //enable pulldowns on inputs
-  Wire.beginTransmission(SX1509_ADDR);
-  Wire.write(0x08); 
-  Wire.write(pinDir >> 8);         
-  Wire.write(pinDir & 0xFF);         
-  Wire.endTransmission();
-  Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.println(pinDir & 0xFF, BIN);
+	//enable pulldowns on inputs
+	Wire.beginTransmission(SX1509_ADDR);
+	Wire.write(0x08); 
+	Wire.write(pinDir >> 8);         
+	Wire.write(pinDir & 0xFF);         
+	Wire.endTransmission();
+	Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.println(pinDir & 0xFF, BIN);
 	
 	//SET  RegDataB and RegDataA 
 	Wire.beginTransmission(SX1509_ADDR);
@@ -64,11 +64,6 @@ bool SX1509::OSCIO_set(bool state)
 		Wire.write(B01011111);         //set internal osc, set OSCIO to output, and HIGH    ///THIS KEEPS SUICIDE CIRCUIT ENABLED 
 		Wire.endTransmission(); 
 	} else {
-		//power down LEDs first... (temporary need for proto3 they are hotwired to vbat...)
-		/*digitalWrite(LED1, HIGH); pinMode(LED1, INPUT);  
-		digitalWrite(LED2, HIGH); pinMode(LED2, INPUT);  
-		digitalWrite(LED3, HIGH); pinMode(LED3, INPUT);  
-		digitalWrite(LED4, HIGH); pinMode(LED4, INPUT);  */
 		
 		Wire.beginTransmission(SX1509_ADDR); 
 		Wire.write(0x1E);  
