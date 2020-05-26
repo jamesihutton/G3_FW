@@ -217,7 +217,7 @@ void init_track()
   Serial.print(s);
   
   if ((s[i-4] == '.') && (s[i-3] == 'm') && (s[i-2] == 'p') && (s[i-1] == '3')){
-    Serial.println("\n\nLoading MP3 codec...\n");
+    Serial.println("\nLoading MP3 codec...");
     audioLogger = &Serial;
     file = new AudioFileSourceSD(s);
     id3 = new AudioFileSourceID3(file);
@@ -227,7 +227,7 @@ void init_track()
     
   }
   else if ((s[i-4] == '.') && (s[i-3] == 'w') && (s[i-2] == 'a') && (s[i-1] == 'v')){
-    Serial.println("\n\nLoading WAV codec...\n");
+    Serial.println("\nLoading WAV codec...");
     audioLogger = &Serial;
     file = new AudioFileSourceSD(s);
     id3 = new AudioFileSourceID3(file);
@@ -239,14 +239,19 @@ void init_track()
   //resume where left off, (if just booted up)
   if (!track_initialized) {
     file->seek(nv.trackFrame, SEEK_SET);
-    Serial.println("\n@FRAME: "); Serial.println(nv.trackFrame);
+    Serial.println("@FRAME: "); Serial.println(nv.trackFrame);
     track_initialized = true; //raised forever after first init
+  } else {
+    nv.trackFrame = 0;
   }
 
   track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
   out->SetGain(track_gain);
   Serial.print("\ngain = ");
   Serial.println(track_gain);
+
+  
+  nv.set_nonVols();
 }
 
 void init_radio()
@@ -329,7 +334,7 @@ void setup()
 
    
 
-  int resp = SD.begin(D0, SPI_SPEED);
+  int resp = SD.begin(D0, SPI_SPEED); //sometimes throws error in IDE... but works fine...
   if (!resp) {
     while(1){
       Serial.println("\n\nCould not connect to SD card\n\n");
@@ -447,7 +452,6 @@ void loop()
         if(io.digitalRead(SW_RIGHT)){
           if (nv.deviceMode == TRACK_MODE) {
             nv.trackIndex++;
-            nv.trackFrame = 0;
             if (nv.trackIndex >= (track_count)) nv.trackIndex = 0;  //loop back to 0 after last song
             init_track();
           } else if (nv.deviceMode == RADIO_MODE) {
@@ -461,7 +465,6 @@ void loop()
         if(io.digitalRead(SW_LEFT)){
           if (nv.deviceMode == TRACK_MODE) {
             nv.trackIndex--; 
-            nv.trackFrame = 0;
             if (nv.trackIndex < 0) nv.trackIndex = track_count-1;  //loop to last song
             init_track();
           } else if (nv.deviceMode == RADIO_MODE) {
@@ -481,7 +484,6 @@ void loop()
              = folder_count-1;  //loop back to 0 after last folder
             listFiles();
             nv.trackIndex = 0;
-            nv.trackFrame = 0;
             init_track();
           } else if (nv.deviceMode == RADIO_MODE) {
             channel = radio.seekUp();
@@ -499,7 +501,6 @@ void loop()
              = 0;  //loop back to 0 after last folder
             listFiles();
             nv.trackIndex = 0;
-            nv.trackFrame = 0;
             init_track();
           } else if (nv.deviceMode == RADIO_MODE) {
             channel = radio.seekDown();
@@ -538,6 +539,16 @@ void loop()
         }
 
         if(io.digitalRead(SW_Q)){
+          
+          //update track frame last second...
+          nv.trackFrame = file->getPos();
+
+          //set all the params in nonVol memory 
+          nv.set_nonVols();
+
+          //safely end SPIFFS
+          SPIFFS.end();
+          
           readSD();
           
           
@@ -549,6 +560,9 @@ void loop()
 
           //set all the params in nonVol memory 
           nv.set_nonVols();
+
+          //safely end SPIFFS
+          SPIFFS.end();
 
           //power down the entire board
           powerDown();
