@@ -14,11 +14,15 @@ void jingle(int id, float gain)
     {
         case JINGLE_POWER_UP:
             file_progmem = new AudioFileSourcePROGMEM(power_up, sizeof(power_up));
-            delay(200); //engine nee
+            delay(200); //engine needs to warm up a bit...
             break;
 
         case JINGLE_POWER_DOWN:
             file_progmem = new AudioFileSourcePROGMEM(power_down, sizeof(power_down));
+            break;
+        
+        case JINGLE_TICK:
+            file_progmem = new AudioFileSourcePROGMEM(tick, sizeof(tick));
             break;
     }
     

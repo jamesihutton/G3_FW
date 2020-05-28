@@ -238,14 +238,11 @@ void init_track()
     wav->begin(id3, out);
   }
 
-  //resume where left off, (if just booted up)
-  if (!track_initialized) {
-    file->seek(nv.trackFrame, SEEK_SET);
-    Serial.println("@FRAME: "); Serial.println(nv.trackFrame);
-    track_initialized = true; //raised forever after first init
-  } else {
-    nv.trackFrame = 0;
-  }
+
+  file->seek(nv.trackFrame, SEEK_SET);
+  Serial.println("@FRAME: "); Serial.println(nv.trackFrame);
+  track_initialized = true; //raised forever after first init
+
 
   track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
   out->SetGain(track_gain);
@@ -435,6 +432,8 @@ void loop()
             nv.deviceVolume ++;
             if (nv.deviceVolume > MAX_VOLUME) nv.deviceVolume = MAX_VOLUME;
             track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
+            jingle(JINGLE_TICK, track_gain); //play the tick sound  
+
             out->SetGain(track_gain);
             Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
             updateLED();
@@ -453,6 +452,7 @@ void loop()
             nv.deviceVolume --;
             if (nv.deviceVolume < 0) nv.deviceVolume = 0;
             track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
+            jingle(JINGLE_TICK, track_gain); //play the tick sound
             out->SetGain(track_gain);
             Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
             updateLED();
@@ -469,6 +469,7 @@ void loop()
           if (nv.deviceMode == TRACK_MODE) {
             nv.trackIndex++;
             if (nv.trackIndex >= (track_count)) nv.trackIndex = 0;  //loop back to 0 after last song
+            nv.trackFrame = 0;
             init_track();
           } else if (nv.deviceMode == RADIO_MODE) {
             channel+=2;
@@ -482,6 +483,7 @@ void loop()
           if (nv.deviceMode == TRACK_MODE) {
             nv.trackIndex--; 
             if (nv.trackIndex < 0) nv.trackIndex = track_count-1;  //loop to last song
+            nv.trackFrame = 0;
             init_track();
           } else if (nv.deviceMode == RADIO_MODE) {
             channel-=2;
@@ -500,6 +502,7 @@ void loop()
              = folder_count-1;  //loop back to 0 after last folder
             listFiles();
             nv.trackIndex = 0;
+            nv.trackFrame = 0;
             init_track();
           } else if (nv.deviceMode == RADIO_MODE) {
             channel = radio.seekUp();
@@ -517,6 +520,7 @@ void loop()
              = 0;  //loop back to 0 after last folder
             listFiles();
             nv.trackIndex = 0;
+            nv.trackFrame = 0;
             init_track();
           } else if (nv.deviceMode == RADIO_MODE) {
             channel = radio.seekDown();
