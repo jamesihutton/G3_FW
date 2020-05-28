@@ -14,6 +14,7 @@
 #include "compass.h" 
 #include "compass_io.h" 
 #include "compass_nonVols.h"
+#include "compass_jingles.h"
 
 #include "SparkFunSi4703.h"
 
@@ -46,9 +47,8 @@ nonVol nv;
 
 
 
-
+#include "AudioFileSourcePROGMEM.h"
 #include "AudioFileSourceSD.h"
-#include "AudioFileSourceSPIFFS.h"
 #include "AudioFileSourceID3.h"
 #include "AudioGeneratorMP3.h"
 #include "AudioGeneratorWAV.h"
@@ -59,6 +59,8 @@ AudioGeneratorMP3 *mp3;
 AudioFileSourceSD *file;
 AudioOutputI2S *out;
 AudioFileSourceID3 *id3;
+
+
 
 
 #define fm_addr  0x10
@@ -293,6 +295,10 @@ void latchPower()
 {
    //latch power
   io.OSCIO_set(HIGH);
+  io.OSCIO_set(HIGH);
+  io.OSCIO_set(HIGH);   //5 times for redundancy... ¯\_(ツ)_/¯
+  io.OSCIO_set(HIGH);
+  io.OSCIO_set(HIGH); 
   Serial.println("power latched");
 }
 
@@ -300,10 +306,7 @@ void latchPower()
 void powerDown()
 {
   Serial.println("turning off power...");
-
   io.OSCIO_set(LOW);
-
-  while(1){delay(1000);} //never pass this point
 }
 
 
@@ -317,8 +320,18 @@ void setup()
   io.init();
 
   latchPower();
+  Serial.println("power latchedx");
+  delay(100);
+
 
   
+  Serial.println("power - up jingle");
+  //play power up jingle
+  jingle(JINGLE_POWER_UP, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
+
+  
+
+
 
   io.update_pinData();
   while(io.digitalRead(SW_POW)){  //wait until user releases SW_POW to proceed
@@ -567,8 +580,14 @@ void loop()
           //safely end SPIFFS
           SPIFFS.end();
 
+          //play power down jingle
+          jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
+          
           //power down the entire board
-          powerDown();
+          while(1){
+            powerDown();
+            delay(100);
+          }
         }
 
 
