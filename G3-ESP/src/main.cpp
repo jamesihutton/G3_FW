@@ -73,7 +73,7 @@ Si4703_Breakout radio(resetPin, SDIO, SCLK);
 int channel = 947;
 char rdsBuffer[10];
 
-#define TRACK_MAX_GAIN    1.0
+#define TRACK_MAX_GAIN    2.6   //with a fixed 1/2vDiv on PAM8019 volume input!
 #define MAX_VOLUME      15    //used for both Radio and MP3 nv.deviceVolume!
 float track_gain = 0.3;     //starting level
 
@@ -251,7 +251,7 @@ void init_track()
   Serial.println(track_gain);
 
   
-  nv.set_nonVols();
+  //nv.set_nonVols(); //not sure if I want to update every time... only on power down?
 }
 
 void init_radio()
@@ -302,6 +302,8 @@ void powerDown()
   Serial.println("turning off power...");
 
   io.OSCIO_set(LOW);
+
+  while(1){delay(1000);} //never pass this point
 }
 
 
@@ -316,7 +318,7 @@ void setup()
 
   latchPower();
 
-
+  
 
   io.update_pinData();
   while(io.digitalRead(SW_POW)){  //wait until user releases SW_POW to proceed
@@ -356,7 +358,7 @@ void setup()
   /*
   if(SPIFFS.format()) Serial.println("File System Formated");
   else                Serial.println("File System Formatting Error");
-  while(1){Serial.println("done"); delay(1000);}
+  //while(1){Serial.println("done"); delay(1000);}
   */
 
   nv.get_nonVols();
@@ -383,9 +385,10 @@ uint16_t switch_states = 0;
 uint16_t switch_states_last = 1;
 void loop()
 {while(1){
+  //feed WDT
   ESP.wdtFeed();
-  //delay(2);
 
+  //check if track has finished
   if (track_play){
     if (mp3->isRunning()) {
       if (!mp3->loop()) { //play next file
@@ -553,7 +556,7 @@ void loop()
           
           
         }
-
+  
         if(io.digitalRead(SW_POW)){
           //update track frame last second...
           nv.trackFrame = file->getPos();
