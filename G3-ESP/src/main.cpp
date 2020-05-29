@@ -67,8 +67,13 @@ int channel = 9470;
 #define fm_min  6410
 char rdsBuffer[10];
 
-#define TRACK_MAX_GAIN    2.6   //with a fixed 1/2vDiv on PAM8019 volume input!
-#define MAX_VOLUME      15    //used for both Radio and MP3 nv.deviceVolume!
+#define TRACK_MAX_GAIN    1.0   //with a fixed 1/2vDiv on PAM8019 volume input!
+#define TRACK_MIN_GAIN    0.1   //with a fixed 1/2vDiv on PAM8019 volume input!
+
+#define RADIO_MAX_GAIN    63    
+#define RADIO_MIN_GAIN    30
+
+#define MAX_DEVICE_VOL    15    //used for both Radio and MP3 nv.deviceVolume!
 float track_gain = 0.3;     //starting level
 
 
@@ -236,7 +241,7 @@ void init_track()
   track_initialized = true; //raised forever after first init
 
 
-  track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
+  track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, TRACK_MIN_GAIN, TRACK_MAX_GAIN);
   out->SetGain(track_gain);
   Serial.print("\ngain = ");
   Serial.println(track_gain);
@@ -247,13 +252,6 @@ void init_track()
 
 void init_radio()
 {
-  /*
-  radio.powerOn();
-  radio.setVolume(nv.deviceVolume);
-  radio.setChannel(channel);
-  displayInfo();
-  updateLED();*/
-
 
   //RESET radio
   io.digitalWrite(USB_SD_RAD_RST, LOW);
@@ -292,17 +290,18 @@ void init_radio()
   Wire.endTransmission();
   delay(200);
 
-  //set_rad_vol(nv.deviceVolume);
-  set_rad_vol(15);
+  set_rad_vol(nv.deviceVolume);
   set_rad_chan(channel);
 
-
+  radio_play = true;
 
 }
 
 int set_rad_vol(int vol)
 {
-  int vhex = map(vol,0,MAX_VOLUME,0,63); //as per max volume in datasheet
+  int vhex;
+  if (vol < 0) vhex = 0;
+  else vhex = map(vol,0,MAX_DEVICE_VOL,RADIO_MIN_GAIN,RADIO_MAX_GAIN); 
   Wire.beginTransmission(fm_addr);
   Wire.write(0x12);  
   Wire.write(0x00);  
@@ -312,6 +311,8 @@ int set_rad_vol(int vol)
   Wire.write(vhex);  // 0-63
   Wire.endTransmission();
   delay(200);
+  Serial.print("\nRadio volume set to ");
+  Serial.println(vhex);
 }
 
 int set_rad_chan(int chan) 
@@ -327,18 +328,21 @@ int set_rad_chan(int chan)
   Wire.write(0x00);  
   int resp = Wire.endTransmission();
   delay(200);
+  Serial.print("Set to channel: ");
+  Serial.println(chan);
   return (!resp);
 }
 
 
 void switch_mode_radio()
 {
-  
+  nv.trackFrame = file->getPos();
   if (mp3->isRunning()) {
     mp3->stop();
   } else if (wav->isRunning()) {
     wav->stop();
   }
+  SD.end();
 
   init_radio();
   track_play = false;
@@ -347,9 +351,18 @@ void switch_mode_radio()
 
 void switch_mode_track()
 {
-  digitalWrite(resetPin,LOW); //put radio into reset mode (disable it)
-  init_track();
+  //RESET radio to disable
+  io.digitalWrite(USB_SD_RAD_RST, LOW);
+  delay(100);
+  io.digitalWrite(USB_SD_RAD_RST, HIGH);
+  delay(100); //remove?
+  SD.begin(D0, SPI_SPEED); 
+  delay(100);
   nv.deviceMode = TRACK_MODE;
+  nv.trackFrame = 0;
+  track_play = true;
+  init_track();
+  
 }
 
 
@@ -501,8 +514,8 @@ void loop()
         if(io.digitalRead(SW_VUP)){
           if (nv.deviceMode == TRACK_MODE) {
             nv.deviceVolume ++;
-            if (nv.deviceVolume > MAX_VOLUME) nv.deviceVolume = MAX_VOLUME;
-            track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
+            if (nv.deviceVolume > MAX_DEVICE_VOL) nv.deviceVolume = MAX_DEVICE_VOL;
+            track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, 0, TRACK_MAX_GAIN);
             
             nv.trackFrame = file->getPos();
             jingle(JINGLE_TICK, track_gain); //play the tick sound  
@@ -514,7 +527,8 @@ void loop()
           } else if (nv.deviceMode == RADIO_MODE) {
             nv.deviceVolume ++;
             if (nv.deviceVolume == 16) nv.deviceVolume = 15;
-            radio.setVolume(nv.deviceVolume);
+
+            set_rad_vol(nv.deviceVolume);
             displayInfo();
             updateLED();
           }
@@ -525,7 +539,7 @@ void loop()
           if (nv.deviceMode == TRACK_MODE) {
             nv.deviceVolume --;
             if (nv.deviceVolume < 0) nv.deviceVolume = 0;
-            track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
+            track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, 0, TRACK_MAX_GAIN);
 
             nv.trackFrame = file->getPos();
             jingle(JINGLE_TICK, track_gain); //play the tick sound
@@ -537,7 +551,7 @@ void loop()
           } else if (nv.deviceMode == RADIO_MODE) {
             nv.deviceVolume --;
             if (nv.deviceVolume < 0) nv.deviceVolume = 0;
-            radio.setVolume(nv.deviceVolume);
+            set_rad_vol(nv.deviceVolume);
             displayInfo();
             updateLED();
           }
@@ -550,9 +564,9 @@ void loop()
             nv.trackFrame = 0;
             init_track();
           } else if (nv.deviceMode == RADIO_MODE) {
-            channel+=2;
-            if (channel > 1079) channel = 879;
-            radio.setChannel(channel);
+            channel += 20;
+            if (channel > fm_max+1) channel = fm_min;
+            set_rad_chan(channel);
             displayInfo();
           }
 
@@ -564,9 +578,9 @@ void loop()
             nv.trackFrame = 0;
             init_track();
           } else if (nv.deviceMode == RADIO_MODE) {
-            channel-=2;
-            if (channel < 879) channel = 1079;
-            radio.setChannel(channel);
+            channel -= 20;
+            if (channel < fm_min-1) channel = fm_max;
+            set_rad_chan(channel);
             displayInfo();
           }
 
@@ -614,22 +628,17 @@ void loop()
           }
           Serial.println(nv.deviceMode);
         }
+
         if(io.digitalRead(SW_PLAY)){
           if (nv.deviceMode == TRACK_MODE) {
-            if (track_play){
-              track_play = false;
-
-
-            }else{
-              track_play = true;
-
-            }
-          } else if (nv.deviceMode == RADIO_MODE) {
+              if (track_play) track_play = false;
+              else track_play = true;
+          }else if (nv.deviceMode == RADIO_MODE) {
             if (radio_play){
-              radio.setVolume(0);
+              set_rad_vol(-1);
               radio_play = false;
             } else {
-              radio.setVolume(nv.deviceVolume);
+              set_rad_vol(nv.deviceVolume);
               radio_play = true;
             }
           }
@@ -740,7 +749,7 @@ void updateLED(){
 void displayInfo()
 {
    Serial.print("Channel:"); Serial.print(channel);
-   Serial.print(" Volume:"); Serial.println(nv.deviceVolume);
+   Serial.print("Volume:"); Serial.println(nv.deviceVolume);
 }
 
 
