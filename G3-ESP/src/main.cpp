@@ -36,15 +36,7 @@ File root;
 SX1509 io; // Create an SX1509 object to be used throughout
 //////////////////////////////////////////////////////////////////////////////
 
-
-
 nonVol nv;
-
-
-
-
-
-
 
 
 #include "AudioFileSourcePROGMEM.h"
@@ -344,9 +336,9 @@ void setup()
   delay(100);
   io.digitalWrite(USB_SD_RST, HIGH);
 
-   
 
-  int resp = SD.begin(D0, SPI_SPEED); //sometimes throws error in IDE... but works fine...
+  int resp = SD.begin(D0, SPI_SPEED); 
+  //int resp = SD.begin(D0); 
   if (!resp) {
     while(1){
       Serial.println("\n\nCould not connect to SD card\n\n");
@@ -365,11 +357,13 @@ void setup()
   else                Serial.println("SPIFFS Initialization...failed");
  
   //Format File System
-  /*
-  if(SPIFFS.format()) Serial.println("File System Formated");
-  else                Serial.println("File System Formatting Error");
-  //while(1){Serial.println("done"); delay(1000);}
-  */
+  if(io.digitalRead(SW_Q)){
+    if(SPIFFS.format()) Serial.println("File System Formated");
+    else                Serial.println("File System Formatting Error");
+  }
+
+  
+  
 
   nv.get_nonVols();
 
@@ -432,6 +426,7 @@ void loop()
             nv.deviceVolume ++;
             if (nv.deviceVolume > MAX_VOLUME) nv.deviceVolume = MAX_VOLUME;
             track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
+            
             jingle(JINGLE_TICK, track_gain); //play the tick sound  
 
             out->SetGain(track_gain);
@@ -669,5 +664,51 @@ void displayInfo()
 float mapf(float x, float in_min, float in_max, float out_min, float out_max)
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+
+AudioGeneratorWAV *wav_progmem;
+AudioFileSourcePROGMEM *file_progmem;
+AudioOutputI2S *out_progmem;
+
+void jingle(int id, float gain)
+{
+    audioLogger = &Serial;
+    switch(id)
+    {
+        case JINGLE_POWER_UP:
+            file_progmem = new AudioFileSourcePROGMEM(power_up, sizeof(power_up));
+            delay(200); //engine needs to warm up a bit...
+            break;
+
+        case JINGLE_POWER_DOWN:
+            file_progmem = new AudioFileSourcePROGMEM(power_down, sizeof(power_down));
+            break;
+        
+        case JINGLE_TICK:
+            file_progmem = new AudioFileSourcePROGMEM(tick, sizeof(tick));
+            break;
+    }
+    
+    out_progmem = new AudioOutputI2S();
+    wav_progmem = new AudioGeneratorWAV();
+    wav_progmem->begin(file_progmem, out_progmem);
+    out_progmem->SetGain(gain);
+    while(1){
+        if (wav_progmem->isRunning()){
+            if (!wav_progmem->loop()){
+            wav_progmem->stop();
+            return;
+            } 
+        }
+        /*
+        if (track_play && (id == JINGLE_TICK)){
+          if (wav->isRunning()) wav->loop();
+          if (mp3->isRunning()) mp3->loop();
+        }*/
+
+
+        ESP.wdtFeed();
+    }
 }
 
