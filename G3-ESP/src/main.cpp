@@ -427,7 +427,9 @@ void loop()
             if (nv.deviceVolume > MAX_VOLUME) nv.deviceVolume = MAX_VOLUME;
             track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
             
+            nv.trackFrame = file->getPos();
             jingle(JINGLE_TICK, track_gain); //play the tick sound  
+            init_track();
 
             out->SetGain(track_gain);
             Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
@@ -447,7 +449,11 @@ void loop()
             nv.deviceVolume --;
             if (nv.deviceVolume < 0) nv.deviceVolume = 0;
             track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
+
+            nv.trackFrame = file->getPos();
             jingle(JINGLE_TICK, track_gain); //play the tick sound
+            init_track();
+
             out->SetGain(track_gain);
             Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
             updateLED();
