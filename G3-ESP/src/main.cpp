@@ -54,9 +54,7 @@ AudioFileSourceID3 *id3;
 
 
 
-
-#define fm_addr  0x10
-
+static const int fm_addr = B1100011;   //i2c address for si4734
 int resetPin = D0;  //GPIO16 HOTWIRE
 int SDIO = D2;
 int SCLK = D1;
@@ -64,7 +62,9 @@ int SCLK = D1;
 
 
 Si4703_Breakout radio(resetPin, SDIO, SCLK);
-int channel = 947;
+int channel = 9470;
+#define fm_max 10790
+#define fm_min  6410
 char rdsBuffer[10];
 
 #define TRACK_MAX_GAIN    2.6   //with a fixed 1/2vDiv on PAM8019 volume input!
@@ -247,27 +247,102 @@ void init_track()
 
 void init_radio()
 {
+  /*
   radio.powerOn();
   radio.setVolume(nv.deviceVolume);
   radio.setChannel(channel);
   displayInfo();
-  updateLED();
+  updateLED();*/
+
+
+  //RESET radio
+  io.digitalWrite(USB_SD_RAD_RST, LOW);
+  delay(100);
+  io.digitalWrite(USB_SD_RAD_RST, HIGH);
+
+  Wire.begin(SDIO, SCLK);  //SDA, SCL
+  delay(200); //remove?
+
+  //POINT TO ADDRESS TO READ FROM
+  Wire.beginTransmission(fm_addr);
+  Wire.write(B00000001);  //0x01  CMD: POWERUP
+  Wire.write(B00010000);  //0x10 //external crystal
+  Wire.write(0x05);  //0x05
+  Wire.endTransmission();
+  delay(200);
+
+  
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  //0x12
+  Wire.write(0x00);  //0x00
+  Wire.write(0x13);  //0x13  // FM_SOFT_MUTE_MAX_ATTENUATION
+  Wire.write(0x02);  //0x02
+  Wire.write(0x00);  //0x00
+  Wire.write(0x00);  //0x03   //3dB
+  Wire.endTransmission();
+  delay(200);
+
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  //0x12
+  Wire.write(0x00);  //0x00
+  Wire.write(0xFF);  //0xFF  // ***DISABLE DEBUG MODE!! PAGE 299!!!
+  Wire.write(0x00);  //0x00
+  Wire.write(0x00);  //0x00
+  Wire.write(0x00);  //0x00
+  Wire.endTransmission();
+  delay(200);
+
+  //set_rad_vol(nv.deviceVolume);
+  set_rad_vol(15);
+  set_rad_chan(channel);
+
+
+
 }
+
+int set_rad_vol(int vol)
+{
+  int vhex = map(vol,0,MAX_VOLUME,0,63); //as per max volume in datasheet
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  
+  Wire.write(0x00);  
+  Wire.write(0x40);  // RX volume
+  Wire.write(0x00);  
+  Wire.write(0x00);  
+  Wire.write(vhex);  // 0-63
+  Wire.endTransmission();
+  delay(200);
+}
+
+int set_rad_chan(int chan) 
+{
+  if (chan < fm_min) return(0);
+  if (chan > fm_max) return(0);
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x20);  
+  Wire.write(0x00);  
+  Wire.write(chan >> 8);  // channel
+  Wire.write(chan & 0x00ff);  
+  Wire.write(0x00);  
+  Wire.write(0x00);  
+  int resp = Wire.endTransmission();
+  delay(200);
+  return (!resp);
+}
+
 
 void switch_mode_radio()
 {
-  if (track_initialized){
-    if (mp3->isRunning()) {
-      mp3->stop();
-    } else if (wav->isRunning()) {
-      wav->stop();
-    }
+  
+  if (mp3->isRunning()) {
+    mp3->stop();
+  } else if (wav->isRunning()) {
+    wav->stop();
   }
 
   init_radio();
   track_play = false;
   nv.deviceMode = RADIO_MODE;
-
 }
 
 void switch_mode_track()
@@ -332,9 +407,9 @@ void setup()
   WiFi.forceSleepBegin(); //<-- saves like 100mA!
 
   //RESET SD card
-  io.digitalWrite(USB_SD_RST, LOW);
+  io.digitalWrite(USB_SD_RAD_RST, LOW);
   delay(100);
-  io.digitalWrite(USB_SD_RST, HIGH);
+  io.digitalWrite(USB_SD_RAD_RST, HIGH);
 
 
   int resp = SD.begin(D0, SPI_SPEED); 
@@ -366,6 +441,8 @@ void setup()
   
 
   nv.get_nonVols();
+  
+  nv.deviceMode = TRACK_MODE; //force track mode on startup for now...
 
   listFolders();
   listFiles();
@@ -623,9 +700,9 @@ void readSD()
   //orient USB MUX from serial to SD
   io.digitalWrite(MUX_SEL, HIGH);
   //RESET SD card and SD reader
-  io.digitalWrite(USB_SD_RST, LOW);
+  io.digitalWrite(USB_SD_RAD_RST, LOW);
   delay(100);
-  io.digitalWrite(USB_SD_RST, HIGH);
+  io.digitalWrite(USB_SD_RAD_RST, HIGH);
 
   //loop until SW_POW is pressed (should reset ESP though when MUX_SEL goes low and triggers FTDI...)
   while(1){
@@ -634,9 +711,9 @@ void readSD()
     if (io.digitalRead(SW_Q)){
       io.digitalWrite(MUX_SEL, LOW);    //this will reset the ESP...
       //RESET SD card and SD reader
-      io.digitalWrite(USB_SD_RST, LOW);   //not reached...
+      io.digitalWrite(USB_SD_RAD_RST, LOW);   //not reached...
       delay(100);
-      io.digitalWrite(USB_SD_RST, HIGH);
+      io.digitalWrite(USB_SD_RAD_RST, HIGH);
       return;
     }
   }
