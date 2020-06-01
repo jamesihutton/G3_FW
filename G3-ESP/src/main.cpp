@@ -67,8 +67,8 @@ int channel = 9470;
 #define fm_min  6410
 char rdsBuffer[10];
 
-#define TRACK_MAX_GAIN    1.0   //with a fixed 1/2vDiv on PAM8019 volume input!
-#define TRACK_MIN_GAIN    0.1   //with a fixed 1/2vDiv on PAM8019 volume input!
+#define TRACK_MAX_GAIN    1.0   //
+#define TRACK_MIN_GAIN    0.1   //
 
 #define RADIO_MAX_GAIN    63    
 #define RADIO_MIN_GAIN    30
@@ -407,7 +407,7 @@ void setup()
   jingle(JINGLE_POWER_UP, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
 
   
-
+  
 
 
   io.update_pinData();
@@ -516,11 +516,11 @@ void loop()
             nv.deviceVolume ++;
             if (nv.deviceVolume > MAX_DEVICE_VOL) nv.deviceVolume = MAX_DEVICE_VOL;
             track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, 0, TRACK_MAX_GAIN);
-            
+            /*
             nv.trackFrame = file->getPos();
             jingle(JINGLE_TICK, track_gain); //play the tick sound  
             init_track();
-
+            */
             out->SetGain(track_gain);
             Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
             updateLED();
@@ -540,10 +540,11 @@ void loop()
             nv.deviceVolume --;
             if (nv.deviceVolume < 0) nv.deviceVolume = 0;
             track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, 0, TRACK_MAX_GAIN);
-
+            /*
             nv.trackFrame = file->getPos();
             jingle(JINGLE_TICK, track_gain); //play the tick sound
             init_track();
+            */
 
             out->SetGain(track_gain);
             Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
@@ -770,7 +771,7 @@ void jingle(int id, float gain)
     {
         case JINGLE_POWER_UP:
             file_progmem = new AudioFileSourcePROGMEM(power_up, sizeof(power_up));
-            delay(200); //engine needs to warm up a bit...
+            delay(250); //engine needs to warm up a bit...
             break;
 
         case JINGLE_POWER_DOWN:
