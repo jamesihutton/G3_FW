@@ -68,7 +68,7 @@ int channel = 9470;
 char rdsBuffer[10];
 
 #define TRACK_MAX_GAIN    0.75   //
-#define TRACK_MIN_GAIN    0.1   //
+#define TRACK_MIN_GAIN    0.01   //
 
 #define RADIO_MAX_GAIN    63    
 #define RADIO_MIN_GAIN    30
@@ -392,22 +392,17 @@ void powerDown()
 void setup()
 {
   Serial.begin(9600); Serial.println("\n\nboot\n\n");
-    
+  delay(100);
+  
   // Set pinModes
   io.init();
   pinMode(D3, INPUT); //!IO_INT pin as input
 
   latchPower();
   Serial.println("power latchedx");
-  
-
-  //check if plugged in
+  delay(100);
 
 
-  //check voltage
-
-
-  delay(100); //remove?
   
   Serial.println("power - up jingle");
   //play power up jingle
