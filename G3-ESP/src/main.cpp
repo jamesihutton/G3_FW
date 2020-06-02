@@ -9,10 +9,12 @@
 #endif
 
 
+
 #include "main.h"
 #include "compass.h" 
 #include "compass_io.h" 
 #include "compass_nonVols.h"
+#include "compass_jingles.h"
 
 #include "SparkFunSi4703.h"
 
@@ -34,20 +36,11 @@ File root;
 SX1509 io; // Create an SX1509 object to be used throughout
 //////////////////////////////////////////////////////////////////////////////
 
-
-
 nonVol nv;
 
 
-
-
-
-
-
-
-
+#include "AudioFileSourcePROGMEM.h"
 #include "AudioFileSourceSD.h"
-#include "AudioFileSourceSPIFFS.h"
 #include "AudioFileSourceID3.h"
 #include "AudioGeneratorMP3.h"
 #include "AudioGeneratorWAV.h"
@@ -60,8 +53,8 @@ AudioOutputI2S *out;
 AudioFileSourceID3 *id3;
 
 
-#define fm_addr  0x10
 
+static const int fm_addr = B1100011;   //i2c address for si4734
 int resetPin = D0;  //GPIO16 HOTWIRE
 int SDIO = D2;
 int SCLK = D1;
@@ -69,11 +62,18 @@ int SCLK = D1;
 
 
 Si4703_Breakout radio(resetPin, SDIO, SCLK);
-int channel = 947;
+int channel = 9470;
+#define fm_max 10790
+#define fm_min  6410
 char rdsBuffer[10];
 
-#define TRACK_MAX_GAIN    1.0
-#define MAX_VOLUME      15    //used for both Radio and MP3 nv.deviceVolume!
+#define TRACK_MAX_GAIN    1.0   //
+#define TRACK_MIN_GAIN    0.1   //
+
+#define RADIO_MAX_GAIN    63    
+#define RADIO_MIN_GAIN    30
+
+#define MAX_DEVICE_VOL    15    //used for both Radio and MP3 nv.deviceVolume!
 float track_gain = 0.3;     //starting level
 
 
@@ -216,7 +216,7 @@ void init_track()
   Serial.print(s);
   
   if ((s[i-4] == '.') && (s[i-3] == 'm') && (s[i-2] == 'p') && (s[i-1] == '3')){
-    Serial.println("\n\nLoading MP3 codec...\n");
+    Serial.println("\nLoading MP3 codec...");
     audioLogger = &Serial;
     file = new AudioFileSourceSD(s);
     id3 = new AudioFileSourceID3(file);
@@ -226,7 +226,7 @@ void init_track()
     
   }
   else if ((s[i-4] == '.') && (s[i-3] == 'w') && (s[i-2] == 'a') && (s[i-1] == 'v')){
-    Serial.println("\n\nLoading WAV codec...\n");
+    Serial.println("\nLoading WAV codec...");
     audioLogger = &Serial;
     file = new AudioFileSourceSD(s);
     id3 = new AudioFileSourceID3(file);
@@ -235,49 +235,134 @@ void init_track()
     wav->begin(id3, out);
   }
 
-  //resume where left off, (if just booted up)
-  if (!track_initialized) {
-    file->seek(nv.trackFrame, SEEK_SET);
-    Serial.println("\n@FRAME: "); Serial.println(nv.trackFrame);
-    track_initialized = true; //raised forever after first init
-  }
 
-  track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
+  file->seek(nv.trackFrame, SEEK_SET);
+  Serial.println("@FRAME: "); Serial.println(nv.trackFrame);
+  track_initialized = true; //raised forever after first init
+
+
+  track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, TRACK_MIN_GAIN, TRACK_MAX_GAIN);
   out->SetGain(track_gain);
   Serial.print("\ngain = ");
   Serial.println(track_gain);
+
+  
+  //nv.set_nonVols(); //not sure if I want to update every time... only on power down?
 }
 
 void init_radio()
 {
-  radio.powerOn();
-  radio.setVolume(nv.deviceVolume);
-  radio.setChannel(channel);
-  displayInfo();
-  updateLED();
+
+  //RESET radio
+  io.digitalWrite(USB_SD_RAD_RST, LOW);
+  delay(100);
+  io.digitalWrite(USB_SD_RAD_RST, HIGH);
+
+  Wire.begin(SDIO, SCLK);  //SDA, SCL
+  delay(200); //remove?
+
+  //POINT TO ADDRESS TO READ FROM
+  Wire.beginTransmission(fm_addr);
+  Wire.write(B00000001);  //0x01  CMD: POWERUP
+  Wire.write(B00010000);  //0x10 //external crystal
+  Wire.write(0x05);  //0x05
+  Wire.endTransmission();
+  delay(200);
+
+  
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  //0x12
+  Wire.write(0x00);  //0x00
+  Wire.write(0x13);  //0x13  // FM_SOFT_MUTE_MAX_ATTENUATION
+  Wire.write(0x02);  //0x02
+  Wire.write(0x00);  //0x00
+  Wire.write(0x00);  //0x03   //3dB
+  Wire.endTransmission();
+  delay(200);
+
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  //0x12
+  Wire.write(0x00);  //0x00
+  Wire.write(0xFF);  //0xFF  // ***DISABLE DEBUG MODE!! PAGE 299!!!
+  Wire.write(0x00);  //0x00
+  Wire.write(0x00);  //0x00
+  Wire.write(0x00);  //0x00
+  Wire.endTransmission();
+  delay(200);
+
+  set_rad_vol(nv.deviceVolume);
+  set_rad_chan(channel);
+
+  radio_play = true;
+
 }
+
+int set_rad_vol(int vol)
+{
+  int vhex;
+  if (vol < 0) vhex = 0;
+  else vhex = map(vol,0,MAX_DEVICE_VOL,RADIO_MIN_GAIN,RADIO_MAX_GAIN); 
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  
+  Wire.write(0x00);  
+  Wire.write(0x40);  // RX volume
+  Wire.write(0x00);  
+  Wire.write(0x00);  
+  Wire.write(vhex);  // 0-63
+  Wire.endTransmission();
+  delay(200);
+  Serial.print("\nRadio volume set to ");
+  Serial.println(vhex);
+}
+
+int set_rad_chan(int chan) 
+{
+  if (chan < fm_min) return(0);
+  if (chan > fm_max) return(0);
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x20);  
+  Wire.write(0x00);  
+  Wire.write(chan >> 8);  // channel
+  Wire.write(chan & 0x00ff);  
+  Wire.write(0x00);  
+  Wire.write(0x00);  
+  int resp = Wire.endTransmission();
+  delay(200);
+  Serial.print("Set to channel: ");
+  Serial.println(chan);
+  return (!resp);
+}
+
 
 void switch_mode_radio()
 {
-  if (track_initialized){
-    if (mp3->isRunning()) {
-      mp3->stop();
-    } else if (wav->isRunning()) {
-      wav->stop();
-    }
+  nv.trackFrame = file->getPos();
+  if (mp3->isRunning()) {
+    mp3->stop();
+  } else if (wav->isRunning()) {
+    wav->stop();
   }
+  SD.end();
 
   init_radio();
   track_play = false;
   nv.deviceMode = RADIO_MODE;
-
 }
 
 void switch_mode_track()
 {
-  digitalWrite(resetPin,LOW); //put radio into reset mode (disable it)
-  init_track();
+  //RESET radio to disable
+  io.digitalWrite(USB_SD_RAD_RST, LOW);
+  delay(100);
+  io.digitalWrite(USB_SD_RAD_RST, HIGH);
+  delay(100); //remove?
+  SD.begin(D0, SPI_SPEED); 
+  delay(100);
   nv.deviceMode = TRACK_MODE;
+  nv.trackFrame = 0;
+  track_play = true;
+  init_track();
+  
 }
 
 
@@ -287,6 +372,10 @@ void latchPower()
 {
    //latch power
   io.OSCIO_set(HIGH);
+  io.OSCIO_set(HIGH);
+  io.OSCIO_set(HIGH);   //5 times for redundancy... ¯\_(ツ)_/¯
+  io.OSCIO_set(HIGH);
+  io.OSCIO_set(HIGH); 
   Serial.println("power latched");
 }
 
@@ -294,7 +383,6 @@ void latchPower()
 void powerDown()
 {
   Serial.println("turning off power...");
-
   io.OSCIO_set(LOW);
 }
 
@@ -309,7 +397,17 @@ void setup()
   io.init();
 
   latchPower();
+  Serial.println("power latchedx");
+  delay(100);
 
+
+  
+  Serial.println("power - up jingle");
+  //play power up jingle
+  jingle(JINGLE_POWER_UP, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
+
+  
+  
 
 
   io.update_pinData();
@@ -322,13 +420,13 @@ void setup()
   WiFi.forceSleepBegin(); //<-- saves like 100mA!
 
   //RESET SD card
-  io.digitalWrite(USB_SD_RST, LOW);
+  io.digitalWrite(USB_SD_RAD_RST, LOW);
   delay(100);
-  io.digitalWrite(USB_SD_RST, HIGH);
+  io.digitalWrite(USB_SD_RAD_RST, HIGH);
 
-   
 
-  int resp = SD.begin(D0, SPI_SPEED);
+  int resp = SD.begin(D0, SPI_SPEED); 
+  //int resp = SD.begin(D0); 
   if (!resp) {
     while(1){
       Serial.println("\n\nCould not connect to SD card\n\n");
@@ -342,9 +440,22 @@ void setup()
     
 
   //UPDATE NONVOLS
-  SPIFFS.begin();
- // SPIFFS.format();    //<--- ONLY NEED TO DO THIS ONCE PER DEVICE
+  //Initialize File System
+  if(SPIFFS.begin())  Serial.println("SPIFFS Initialize....ok");
+  else                Serial.println("SPIFFS Initialization...failed");
+ 
+  //Format File System
+  if(io.digitalRead(SW_Q)){
+    if(SPIFFS.format()) Serial.println("File System Formated");
+    else                Serial.println("File System Formatting Error");
+  }
+
+  
+  
+
   nv.get_nonVols();
+  
+  nv.deviceMode = TRACK_MODE; //force track mode on startup for now...
 
   listFolders();
   listFiles();
@@ -368,9 +479,10 @@ uint16_t switch_states = 0;
 uint16_t switch_states_last = 1;
 void loop()
 {while(1){
+  //feed WDT
   ESP.wdtFeed();
-  //delay(2);
 
+  //check if track has finished
   if (track_play){
     if (mp3->isRunning()) {
       if (!mp3->loop()) { //play next file
@@ -402,15 +514,21 @@ void loop()
         if(io.digitalRead(SW_VUP)){
           if (nv.deviceMode == TRACK_MODE) {
             nv.deviceVolume ++;
-            if (nv.deviceVolume > MAX_VOLUME) nv.deviceVolume = MAX_VOLUME;
-            track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
+            if (nv.deviceVolume > MAX_DEVICE_VOL) nv.deviceVolume = MAX_DEVICE_VOL;
+            track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, 0, TRACK_MAX_GAIN);
+            /*
+            nv.trackFrame = file->getPos();
+            jingle(JINGLE_TICK, track_gain); //play the tick sound  
+            init_track();
+            */
             out->SetGain(track_gain);
             Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
             updateLED();
           } else if (nv.deviceMode == RADIO_MODE) {
             nv.deviceVolume ++;
             if (nv.deviceVolume == 16) nv.deviceVolume = 15;
-            radio.setVolume(nv.deviceVolume);
+
+            set_rad_vol(nv.deviceVolume);
             displayInfo();
             updateLED();
           }
@@ -421,14 +539,20 @@ void loop()
           if (nv.deviceMode == TRACK_MODE) {
             nv.deviceVolume --;
             if (nv.deviceVolume < 0) nv.deviceVolume = 0;
-            track_gain = mapf(nv.deviceVolume, 0, MAX_VOLUME, 0, TRACK_MAX_GAIN);
+            track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, 0, TRACK_MAX_GAIN);
+            /*
+            nv.trackFrame = file->getPos();
+            jingle(JINGLE_TICK, track_gain); //play the tick sound
+            init_track();
+            */
+
             out->SetGain(track_gain);
             Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
             updateLED();
           } else if (nv.deviceMode == RADIO_MODE) {
             nv.deviceVolume --;
             if (nv.deviceVolume < 0) nv.deviceVolume = 0;
-            radio.setVolume(nv.deviceVolume);
+            set_rad_vol(nv.deviceVolume);
             displayInfo();
             updateLED();
           }
@@ -437,13 +561,13 @@ void loop()
         if(io.digitalRead(SW_RIGHT)){
           if (nv.deviceMode == TRACK_MODE) {
             nv.trackIndex++;
-            nv.trackFrame = 0;
             if (nv.trackIndex >= (track_count)) nv.trackIndex = 0;  //loop back to 0 after last song
+            nv.trackFrame = 0;
             init_track();
           } else if (nv.deviceMode == RADIO_MODE) {
-            channel+=2;
-            if (channel > 1079) channel = 879;
-            radio.setChannel(channel);
+            channel += 20;
+            if (channel > fm_max+1) channel = fm_min;
+            set_rad_chan(channel);
             displayInfo();
           }
 
@@ -451,13 +575,13 @@ void loop()
         if(io.digitalRead(SW_LEFT)){
           if (nv.deviceMode == TRACK_MODE) {
             nv.trackIndex--; 
-            nv.trackFrame = 0;
             if (nv.trackIndex < 0) nv.trackIndex = track_count-1;  //loop to last song
+            nv.trackFrame = 0;
             init_track();
           } else if (nv.deviceMode == RADIO_MODE) {
-            channel-=2;
-            if (channel < 879) channel = 1079;
-            radio.setChannel(channel);
+            channel -= 20;
+            if (channel < fm_min-1) channel = fm_max;
+            set_rad_chan(channel);
             displayInfo();
           }
 
@@ -505,22 +629,17 @@ void loop()
           }
           Serial.println(nv.deviceMode);
         }
+
         if(io.digitalRead(SW_PLAY)){
           if (nv.deviceMode == TRACK_MODE) {
-            if (track_play){
-              track_play = false;
-
-
-            }else{
-              track_play = true;
-
-            }
-          } else if (nv.deviceMode == RADIO_MODE) {
+              if (track_play) track_play = false;
+              else track_play = true;
+          }else if (nv.deviceMode == RADIO_MODE) {
             if (radio_play){
-              radio.setVolume(0);
+              set_rad_vol(-1);
               radio_play = false;
             } else {
-              radio.setVolume(nv.deviceVolume);
+              set_rad_vol(nv.deviceVolume);
               radio_play = true;
             }
           }
@@ -528,11 +647,21 @@ void loop()
         }
 
         if(io.digitalRead(SW_Q)){
+          
+          //update track frame last second...
+          nv.trackFrame = file->getPos();
+
+          //set all the params in nonVol memory 
+          nv.set_nonVols();
+
+          //safely end SPIFFS
+          SPIFFS.end();
+          
           readSD();
           
           
         }
-
+  
         if(io.digitalRead(SW_POW)){
           //update track frame last second...
           nv.trackFrame = file->getPos();
@@ -540,8 +669,17 @@ void loop()
           //set all the params in nonVol memory 
           nv.set_nonVols();
 
+          //safely end SPIFFS
+          SPIFFS.end();
+
+          //play power down jingle
+          jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
+          
           //power down the entire board
-          powerDown();
+          while(1){
+            powerDown();
+            delay(100);
+          }
         }
 
 
@@ -572,9 +710,9 @@ void readSD()
   //orient USB MUX from serial to SD
   io.digitalWrite(MUX_SEL, HIGH);
   //RESET SD card and SD reader
-  io.digitalWrite(USB_SD_RST, LOW);
+  io.digitalWrite(USB_SD_RAD_RST, LOW);
   delay(100);
-  io.digitalWrite(USB_SD_RST, HIGH);
+  io.digitalWrite(USB_SD_RAD_RST, HIGH);
 
   //loop until SW_POW is pressed (should reset ESP though when MUX_SEL goes low and triggers FTDI...)
   while(1){
@@ -583,9 +721,9 @@ void readSD()
     if (io.digitalRead(SW_Q)){
       io.digitalWrite(MUX_SEL, LOW);    //this will reset the ESP...
       //RESET SD card and SD reader
-      io.digitalWrite(USB_SD_RST, LOW);   //not reached...
+      io.digitalWrite(USB_SD_RAD_RST, LOW);   //not reached...
       delay(100);
-      io.digitalWrite(USB_SD_RST, HIGH);
+      io.digitalWrite(USB_SD_RAD_RST, HIGH);
       return;
     }
   }
@@ -612,12 +750,58 @@ void updateLED(){
 void displayInfo()
 {
    Serial.print("Channel:"); Serial.print(channel);
-   Serial.print(" Volume:"); Serial.println(nv.deviceVolume);
+   Serial.print("Volume:"); Serial.println(nv.deviceVolume);
 }
 
 
 float mapf(float x, float in_min, float in_max, float out_min, float out_max)
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+
+AudioGeneratorWAV *wav_progmem;
+AudioFileSourcePROGMEM *file_progmem;
+AudioOutputI2S *out_progmem;
+
+void jingle(int id, float gain)
+{
+    audioLogger = &Serial;
+    switch(id)
+    {
+        case JINGLE_POWER_UP:
+            file_progmem = new AudioFileSourcePROGMEM(power_up, sizeof(power_up));
+            delay(250); //engine needs to warm up a bit...
+            break;
+
+        case JINGLE_POWER_DOWN:
+            file_progmem = new AudioFileSourcePROGMEM(power_down, sizeof(power_down));
+            break;
+        
+        case JINGLE_TICK:
+            file_progmem = new AudioFileSourcePROGMEM(tick, sizeof(tick));
+            break;
+    }
+    
+    out_progmem = new AudioOutputI2S();
+    wav_progmem = new AudioGeneratorWAV();
+    wav_progmem->begin(file_progmem, out_progmem);
+    out_progmem->SetGain(gain);
+    while(1){
+        if (wav_progmem->isRunning()){
+            if (!wav_progmem->loop()){
+            wav_progmem->stop();
+            return;
+            } 
+        }
+        /*
+        if (track_play && (id == JINGLE_TICK)){
+          if (wav->isRunning()) wav->loop();
+          if (mp3->isRunning()) mp3->loop();
+        }*/
+
+
+        ESP.wdtFeed();
+    }
 }
 
