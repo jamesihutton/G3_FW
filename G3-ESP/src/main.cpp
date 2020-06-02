@@ -67,7 +67,7 @@ int channel = 9470;
 #define fm_min  6410
 char rdsBuffer[10];
 
-#define TRACK_MAX_GAIN    1.0   //
+#define TRACK_MAX_GAIN    0.75   //
 #define TRACK_MIN_GAIN    0.1   //
 
 #define RADIO_MAX_GAIN    63    
@@ -392,22 +392,27 @@ void powerDown()
 void setup()
 {
   Serial.begin(9600); Serial.println("\n\nboot\n\n");
-  delay(100);
+    
   // Set pinModes
   io.init();
+  pinMode(D3, INPUT); //!IO_INT pin as input
 
   latchPower();
   Serial.println("power latchedx");
-  delay(100);
+  
+
+  //check if plugged in
 
 
+  //check voltage
+
+
+  delay(100); //remove?
   
   Serial.println("power - up jingle");
   //play power up jingle
   jingle(JINGLE_POWER_UP, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
 
-  
-  
 
 
   io.update_pinData();
@@ -475,220 +480,227 @@ void setup()
 
 int ms = 0;
 int last_ms = 0;
-uint16_t switch_states = 0;
-uint16_t switch_states_last = 1;
 void loop()
 {while(1){
   //feed WDT
   ESP.wdtFeed();
 
+  //CONSTANT TICK HANDLES
+  track_tick();
+
+  //MS TICK HANDLES...
+  ms = millis();
+  if (ms == last_ms) continue;
+  last_ms = ms;
+
+  if (!(ms%5)){
+      button_tick();
+  }
+}}
+
+void track_tick()
+{
   //check if track has finished
   if (track_play){
     if (mp3->isRunning()) {
       if (!mp3->loop()) { //play next file
         nv.trackIndex++;
+        nv.trackFrame=0;
         if (nv.trackIndex >= (track_count)) nv.trackIndex = 0;  //loop back to 0 after last song
         init_track();
       }
     } else if (wav->isRunning()){
         if (!wav->loop()) { //play next file
         nv.trackIndex++;
+        nv.trackFrame=0;
         if (nv.trackIndex >= (track_count)) nv.trackIndex = 0;  //loop back to 0 after last song
         init_track();
       }
     }
     else {init_track();}
   }
+}
 
-  ms = millis();
-  if (ms == last_ms) continue;
-  last_ms = ms;
+void button_tick()
+{
+  if(!digitalRead(D3)){ //if !IO_INT is triggered... read buttons
 
-  //NEEDS TO CHANGE TO >50... WORK ON THIS LATER...
-  if (!(ms%50)){
+      Serial.println("button pressed");
 
-    switch_states = io.update_pinData();    //this must be called before reading any pins! (reads them all at once in one command...)
-    if (switch_states != switch_states_last) {
+      io.update_pinData();    //this must be called before reading any pins! (reads them all at once in one command...)
+      if(io.digitalRead(SW_VUP)){
+        if (nv.deviceMode == TRACK_MODE) {
+          nv.deviceVolume ++;
+          if (nv.deviceVolume > MAX_DEVICE_VOL) nv.deviceVolume = MAX_DEVICE_VOL;
+          track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, 0, TRACK_MAX_GAIN);
+          /*
+          nv.trackFrame = file->getPos();
+          jingle(JINGLE_TICK, track_gain); //play the tick sound  
+          init_track();
+          */
+          out->SetGain(track_gain);
+          Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
+          updateLED();
+        } else if (nv.deviceMode == RADIO_MODE) {
+          nv.deviceVolume ++;
+          if (nv.deviceVolume == 16) nv.deviceVolume = 15;
+
+          set_rad_vol(nv.deviceVolume);
+          displayInfo();
+          updateLED();
+        }
+
+
+      }
+      if(io.digitalRead(SW_VDOWN)){
+        if (nv.deviceMode == TRACK_MODE) {
+          nv.deviceVolume --;
+          if (nv.deviceVolume < 0) nv.deviceVolume = 0;
+          track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, 0, TRACK_MAX_GAIN);
+          /*
+          nv.trackFrame = file->getPos();
+          jingle(JINGLE_TICK, track_gain); //play the tick sound
+          init_track();
+          */
+
+          out->SetGain(track_gain);
+          Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
+          updateLED();
+        } else if (nv.deviceMode == RADIO_MODE) {
+          nv.deviceVolume --;
+          if (nv.deviceVolume < 0) nv.deviceVolume = 0;
+          set_rad_vol(nv.deviceVolume);
+          displayInfo();
+          updateLED();
+        }
+
+      }
+      if(io.digitalRead(SW_RIGHT)){
+        if (nv.deviceMode == TRACK_MODE) {
+          nv.trackIndex++;
+          if (nv.trackIndex >= (track_count)) nv.trackIndex = 0;  //loop back to 0 after last song
+          nv.trackFrame = 0;
+          init_track();
+        } else if (nv.deviceMode == RADIO_MODE) {
+          channel += 20;
+          if (channel > fm_max+1) channel = fm_min;
+          set_rad_chan(channel);
+          displayInfo();
+        }
+
+      }
+      if(io.digitalRead(SW_LEFT)){
+        if (nv.deviceMode == TRACK_MODE) {
+          nv.trackIndex--; 
+          if (nv.trackIndex < 0) nv.trackIndex = track_count-1;  //loop to last song
+          nv.trackFrame = 0;
+          init_track();
+        } else if (nv.deviceMode == RADIO_MODE) {
+          channel -= 20;
+          if (channel < fm_min-1) channel = fm_max;
+          set_rad_chan(channel);
+          displayInfo();
+        }
+
+      }
+      if(io.digitalRead(SW_UP)){
+        if (nv.deviceMode == TRACK_MODE) {
+          nv.folderIndex
+          --;
+          if (nv.folderIndex
+          < 0) nv.folderIndex
+          = folder_count-1;  //loop back to 0 after last folder
+          listFiles();
+          nv.trackIndex = 0;
+          nv.trackFrame = 0;
+          init_track();
+        } else if (nv.deviceMode == RADIO_MODE) {
+          channel = radio.seekUp();
+          displayInfo();
+          updateLED();
+        }
+
+      }
+      if(io.digitalRead(SW_DOWN)){
+        if (nv.deviceMode == TRACK_MODE) {
+          nv.folderIndex
+          ++;
+          if (nv.folderIndex
+          >= (folder_count)) nv.folderIndex
+          = 0;  //loop back to 0 after last folder
+          listFiles();
+          nv.trackIndex = 0;
+          nv.trackFrame = 0;
+          init_track();
+        } else if (nv.deviceMode == RADIO_MODE) {
+          channel = radio.seekDown();
+          displayInfo();
+          updateLED();
+        }
+      }
+      if(io.digitalRead(SW_MODE)){
+        if (nv.deviceMode == TRACK_MODE) {
+          switch_mode_radio();
+        } else if (nv.deviceMode == RADIO_MODE) {
+          switch_mode_track();
+        }
+        Serial.println(nv.deviceMode);
+      }
+
+      if(io.digitalRead(SW_PLAY)){
+        if (nv.deviceMode == TRACK_MODE) {
+            if (track_play) track_play = false;
+            else track_play = true;
+        }else if (nv.deviceMode == RADIO_MODE) {
+          if (radio_play){
+            set_rad_vol(-1);
+            radio_play = false;
+          } else {
+            set_rad_vol(nv.deviceVolume);
+            radio_play = true;
+          }
+        }
+
+      }
+
+      if(io.digitalRead(SW_Q)){
+        
+        //update track frame last second...
+        nv.trackFrame = file->getPos();
+
+        //set all the params in nonVol memory 
+        nv.set_nonVols();
+
+        //safely end SPIFFS
+        SPIFFS.end();
+        
+        readSD();
         
         
-        if(io.digitalRead(SW_VUP)){
-          if (nv.deviceMode == TRACK_MODE) {
-            nv.deviceVolume ++;
-            if (nv.deviceVolume > MAX_DEVICE_VOL) nv.deviceVolume = MAX_DEVICE_VOL;
-            track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, 0, TRACK_MAX_GAIN);
-            /*
-            nv.trackFrame = file->getPos();
-            jingle(JINGLE_TICK, track_gain); //play the tick sound  
-            init_track();
-            */
-            out->SetGain(track_gain);
-            Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
-            updateLED();
-          } else if (nv.deviceMode == RADIO_MODE) {
-            nv.deviceVolume ++;
-            if (nv.deviceVolume == 16) nv.deviceVolume = 15;
+      }
 
-            set_rad_vol(nv.deviceVolume);
-            displayInfo();
-            updateLED();
-          }
+      if(io.digitalRead(SW_POW)){
+        //update track frame last second...
+        nv.trackFrame = file->getPos();
 
+        //set all the params in nonVol memory 
+        nv.set_nonVols();
 
+        //safely end SPIFFS
+        SPIFFS.end();
+
+        //play power down jingle
+        jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
+        
+        //power down the entire board
+        while(1){
+          powerDown();
+          delay(100);
         }
-        if(io.digitalRead(SW_VDOWN)){
-          if (nv.deviceMode == TRACK_MODE) {
-            nv.deviceVolume --;
-            if (nv.deviceVolume < 0) nv.deviceVolume = 0;
-            track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, 0, TRACK_MAX_GAIN);
-            /*
-            nv.trackFrame = file->getPos();
-            jingle(JINGLE_TICK, track_gain); //play the tick sound
-            init_track();
-            */
+      }
+  }
+}
 
-            out->SetGain(track_gain);
-            Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
-            updateLED();
-          } else if (nv.deviceMode == RADIO_MODE) {
-            nv.deviceVolume --;
-            if (nv.deviceVolume < 0) nv.deviceVolume = 0;
-            set_rad_vol(nv.deviceVolume);
-            displayInfo();
-            updateLED();
-          }
-
-        }
-        if(io.digitalRead(SW_RIGHT)){
-          if (nv.deviceMode == TRACK_MODE) {
-            nv.trackIndex++;
-            if (nv.trackIndex >= (track_count)) nv.trackIndex = 0;  //loop back to 0 after last song
-            nv.trackFrame = 0;
-            init_track();
-          } else if (nv.deviceMode == RADIO_MODE) {
-            channel += 20;
-            if (channel > fm_max+1) channel = fm_min;
-            set_rad_chan(channel);
-            displayInfo();
-          }
-
-        }
-        if(io.digitalRead(SW_LEFT)){
-          if (nv.deviceMode == TRACK_MODE) {
-            nv.trackIndex--; 
-            if (nv.trackIndex < 0) nv.trackIndex = track_count-1;  //loop to last song
-            nv.trackFrame = 0;
-            init_track();
-          } else if (nv.deviceMode == RADIO_MODE) {
-            channel -= 20;
-            if (channel < fm_min-1) channel = fm_max;
-            set_rad_chan(channel);
-            displayInfo();
-          }
-
-        }
-        if(io.digitalRead(SW_UP)){
-          if (nv.deviceMode == TRACK_MODE) {
-            nv.folderIndex
-             --;
-            if (nv.folderIndex
-             < 0) nv.folderIndex
-             = folder_count-1;  //loop back to 0 after last folder
-            listFiles();
-            nv.trackIndex = 0;
-            nv.trackFrame = 0;
-            init_track();
-          } else if (nv.deviceMode == RADIO_MODE) {
-            channel = radio.seekUp();
-            displayInfo();
-            updateLED();
-          }
-
-        }
-        if(io.digitalRead(SW_DOWN)){
-          if (nv.deviceMode == TRACK_MODE) {
-            nv.folderIndex
-             ++;
-            if (nv.folderIndex
-             >= (folder_count)) nv.folderIndex
-             = 0;  //loop back to 0 after last folder
-            listFiles();
-            nv.trackIndex = 0;
-            nv.trackFrame = 0;
-            init_track();
-          } else if (nv.deviceMode == RADIO_MODE) {
-            channel = radio.seekDown();
-            displayInfo();
-            updateLED();
-          }
-        }
-        if(io.digitalRead(SW_MODE)){
-          if (nv.deviceMode == TRACK_MODE) {
-            switch_mode_radio();
-          } else if (nv.deviceMode == RADIO_MODE) {
-            switch_mode_track();
-          }
-          Serial.println(nv.deviceMode);
-        }
-
-        if(io.digitalRead(SW_PLAY)){
-          if (nv.deviceMode == TRACK_MODE) {
-              if (track_play) track_play = false;
-              else track_play = true;
-          }else if (nv.deviceMode == RADIO_MODE) {
-            if (radio_play){
-              set_rad_vol(-1);
-              radio_play = false;
-            } else {
-              set_rad_vol(nv.deviceVolume);
-              radio_play = true;
-            }
-          }
-
-        }
-
-        if(io.digitalRead(SW_Q)){
-          
-          //update track frame last second...
-          nv.trackFrame = file->getPos();
-
-          //set all the params in nonVol memory 
-          nv.set_nonVols();
-
-          //safely end SPIFFS
-          SPIFFS.end();
-          
-          readSD();
-          
-          
-        }
-  
-        if(io.digitalRead(SW_POW)){
-          //update track frame last second...
-          nv.trackFrame = file->getPos();
-
-          //set all the params in nonVol memory 
-          nv.set_nonVols();
-
-          //safely end SPIFFS
-          SPIFFS.end();
-
-          //play power down jingle
-          jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
-          
-          //power down the entire board
-          while(1){
-            powerDown();
-            delay(100);
-          }
-        }
-
-
-
-    switch_states_last = switch_states;
-
-    //delay(1); //removing this makes the watchdog trip in radio mode....idk...reduce?
-  }}
-}}
 
 //never leaves this function
 void readSD()
@@ -771,7 +783,7 @@ void jingle(int id, float gain)
     {
         case JINGLE_POWER_UP:
             file_progmem = new AudioFileSourcePROGMEM(power_up, sizeof(power_up));
-            delay(250); //engine needs to warm up a bit...
+            delay(300); //engine needs to warm up a bit...
             break;
 
         case JINGLE_POWER_DOWN:

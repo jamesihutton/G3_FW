@@ -27,6 +27,25 @@ bool SX1509::init(void)
 	Wire.write(0x1F); 
 	Wire.write(0x10);         //Sets CLK = fOSC, (needed for PWM), (set to 0x00 if PWM not needed)
 	Wire.endTransmission();
+
+	//SET RegInterruptMask
+	Wire.beginTransmission(SX1509_ADDR);
+	Wire.write(0x12); 
+	Wire.write(DEFAULT_INTMASK >> 8);    	//sets all the inputs as interrupts
+	Wire.write(DEFAULT_INTMASK & 0xFF); 
+
+	Wire.write(DEFAULT_SENSE_B >> 8);    	//sets the correct inputs to int on rising edge
+	Wire.write(DEFAULT_SENSE_B & 0xFF);  
+	Wire.write(DEFAULT_SENSE_A >> 8);    	
+	Wire.write(DEFAULT_SENSE_A & 0xFF);  
+	Wire.endTransmission();
+
+	//SET RegDebounce
+	Wire.beginTransmission(SX1509_ADDR);
+	Wire.write(0x23);
+	Wire.write(0xFF);		//enable debounce for all inputs
+	Wire.write(0xFF);
+	Wire.endTransmission();
 	
 	
 	//SET RegDirB and RegDirA (pinModes)
@@ -150,6 +169,12 @@ uint16_t SX1509::get_pinState_raw()
 	return pinState;
 }
 
+
+/*
+NOTE:
+This retrieves the current pinData as it is when read, not as it was when trigger happened!
+Trigger from SX is simply meant as a "hey, read me" message to ESP
+*/
 uint16_t SX1509::update_pinData()
 {
 	Wire.beginTransmission(SX1509_ADDR);

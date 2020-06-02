@@ -5,7 +5,8 @@
 #ifndef main_h
 #define main_h
 
-
+void button_tick();
+void track_tick();
 int set_rad_chan(int chan); 
 int set_rad_vol(int vol);
 void displayInfo();
