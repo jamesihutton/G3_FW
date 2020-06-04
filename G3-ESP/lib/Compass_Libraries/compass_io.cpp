@@ -54,7 +54,7 @@ bool SX1509::init(void)
 	Wire.write(pinDir >> 8);         
 	Wire.write(pinDir & 0xFF);         
 	Wire.endTransmission();
-	Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.println(pinDir & 0xFF, BIN);
+	
 
 	//enable pulldowns on inputs
 	Wire.beginTransmission(SX1509_ADDR);
@@ -62,7 +62,7 @@ bool SX1509::init(void)
 	Wire.write(pinDir >> 8);         
 	Wire.write(pinDir & 0xFF);         
 	Wire.endTransmission();
-	Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.println(pinDir & 0xFF, BIN);
+	
 	
 	//SET  RegDataB and RegDataA 
 	Wire.beginTransmission(SX1509_ADDR);
@@ -124,7 +124,7 @@ bool SX1509::pinMode(uint16_t pin, bool dir)
 	Wire.write(pinDir & 0xFF);         
 	if(!Wire.endTransmission()) resp = 1;   //success
 
- Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.print(pinDir & 0xFF, BIN);
+ 
 
   //If input, set to pull-downs to avoid need for resistors on PCB 
   if (dir == 1) {
@@ -133,7 +133,7 @@ bool SX1509::pinMode(uint16_t pin, bool dir)
     Wire.write(pinDir >> 8);         //these regs should match pinDir reg, since INPUT = 1, and pulldown = 1
     Wire.write(pinDir & 0xFF);         
     if(!Wire.endTransmission()) resp = 1;   //success
-    Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.print(pinDir & 0xFF, BIN);
+
   }
 	
 	return resp;

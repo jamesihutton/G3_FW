@@ -16,15 +16,17 @@
 #include "compass_nonVols.h"
 #include "compass_jingles.h"
 
-#include "SparkFunSi4703.h"
 
 
+#include <Wire.h>
 
-
+#include <twi.h>
 #include <SPI.h>
 #include <SD.h>
 // You may need a fast SD card. Set this as high as it will work (40MHz max).
 #define SPI_SPEED   SD_SCK_MHZ(40)
+#define SD_CS       D0
+
 
 #include "string.h"
 File root;
@@ -55,13 +57,11 @@ AudioFileSourceID3 *id3;
 
 
 static const int fm_addr = B1100011;   //i2c address for si4734
-int resetPin = D0;  //GPIO16 HOTWIRE
 int SDIO = D2;
 int SCLK = D1;
 
 
 
-Si4703_Breakout radio(resetPin, SDIO, SCLK);
 int channel = 9470;
 #define fm_max 10790
 #define fm_min  6410
@@ -356,7 +356,7 @@ void switch_mode_track()
   delay(100);
   io.digitalWrite(USB_SD_RAD_RST, HIGH);
   delay(100); //remove?
-  SD.begin(D0, SPI_SPEED); 
+  SD.begin(SD_CS, SPI_SPEED); 
   delay(100);
   nv.deviceMode = TRACK_MODE;
   nv.trackFrame = 0;
@@ -397,6 +397,9 @@ void setup()
   // Set pinModes
   io.init();
   pinMode(D3, INPUT); //!IO_INT pin as input
+  pinMode(D0, OUTPUT);
+  digitalWrite(D0, 0);
+
 
   latchPower();
   Serial.println("power latchedx");
@@ -425,7 +428,7 @@ void setup()
   io.digitalWrite(USB_SD_RAD_RST, HIGH);
 
 
-  int resp = SD.begin(D0, SPI_SPEED); 
+  int resp = SD.begin(SD_CS, SPI_SPEED); 
   //int resp = SD.begin(D0); 
   if (!resp) {
     while(1){
@@ -491,6 +494,11 @@ void loop()
   if (!(ms%5)){
       button_tick();
   }
+
+  if (!(ms%100)){
+    adc_set(ADC_PIN_USBVCC);
+    Serial.println(adc_get(ADC_PIN_VCC));
+  }
 }}
 
 void track_tick()
@@ -521,7 +529,6 @@ void button_tick()
   if(!digitalRead(D3)){ //if !IO_INT is triggered... read buttons
 
       Serial.println("button pressed");
-
       io.update_pinData();    //this must be called before reading any pins! (reads them all at once in one command...)
       if(io.digitalRead(SW_VUP)){
         if (nv.deviceMode == TRACK_MODE) {
@@ -610,7 +617,7 @@ void button_tick()
           nv.trackFrame = 0;
           init_track();
         } else if (nv.deviceMode == RADIO_MODE) {
-          channel = radio.seekUp();
+          
           displayInfo();
           updateLED();
         }
@@ -628,7 +635,7 @@ void button_tick()
           nv.trackFrame = 0;
           init_track();
         } else if (nv.deviceMode == RADIO_MODE) {
-          channel = radio.seekDown();
+          
           displayInfo();
           updateLED();
         }
@@ -810,5 +817,68 @@ void jingle(int id, float gain)
 
         ESP.wdtFeed();
     }
+}
+
+
+/*
+    NOTES:
+    -add delay between set and get to let line settle
+    -Never read from 4-7 when expecting a button press
+
+*/
+#include <core_esp8266_si2c.cpp>
+
+ADC_MODE(ADC_TOUT);
+#define ADC_SAMPLE_COUNT    10  //read and average this many samples each time
+#define ADC_CEILING_MV      972  //mv that corresponds to 1023 in the adc
+void adc_set(int pin)
+{
+    
+  SCL_LOW(SCLK);
+  (!!(pin & 0b0001)) ? (SDA_HIGH(SCLK)) : (SDA_LOW(SCLK));
+  (!!(pin & 0b0010)) ? (SCL_HIGH(SCLK)) : (SCL_LOW(SCLK));
+
+  //digitalWrite(SDA, !!(pin & 0b0001));
+  //digitalWrite(SCL, !!(pin & 0b0010));
+  //digitalWrite(D0,  !!(pin & 0b0100));
+  //digitalWrite(D0, 0);
+  //Wire.begin(SDA, SCL);
+}
+
+//must always first be set
+//returns mapped value in mv depending on pin being read
+uint32_t adc_get(int pin)
+{
+  uint32_t adc = 0;
+
+  //average 1000 readings
+  for (int i = 0; i<ADC_SAMPLE_COUNT; i++){
+    adc += analogRead(A0);
+  } 
+  adc /= ADC_SAMPLE_COUNT;
+
+  //convert to mv
+  adc = map(adc, 0, 1023, 0, ADC_CEILING_MV); 
+
+  //correct for vdivs for whatever pin being read
+  switch(pin)
+  {
+    case ADC_PIN_USBVCC:
+
+      break;
+    
+    case ADC_PIN_CHRG:
+
+      break;
+    
+    case ADC_PIN_HPDET:
+
+      break;
+    
+    case ADC_PIN_VCC:
+      return(adc*4);    // 1/4vdiv
+      break;
+  
+  }
 }
 
