@@ -90,7 +90,7 @@ int folder_count = 0;
 
 bool track_initialized = 0; //only happens first time
 
-bool track_play = true;
+bool track_play = false;
 bool radio_play = false;
 
 
@@ -255,7 +255,7 @@ void init_radio()
 
   //RESET radio
   io.digitalWrite(USB_SD_RAD_RST, LOW);
-  delay(100);
+  delay(10);
   io.digitalWrite(USB_SD_RAD_RST, HIGH);
 
   Wire.begin(SDIO, SCLK);  //SDA, SCL
@@ -333,6 +333,16 @@ int set_rad_chan(int chan)
   return (!resp);
 }
 
+//sets the radio into low power state
+//NOTE: only responds to power_up command after this (or rst)
+//All GPO's are low when in this state
+int powerdown_radio()
+{
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x11);  
+  int resp = Wire.endTransmission();
+  return (!resp);
+}
 
 void switch_mode_radio()
 {
@@ -346,20 +356,20 @@ void switch_mode_radio()
 
   init_radio();
   track_play = false;
+  radio_play = true;
   nv.deviceMode = RADIO_MODE;
 }
 
 void switch_mode_track()
 {
-  //RESET radio to disable
-  io.digitalWrite(USB_SD_RAD_RST, LOW);
-  delay(100);
-  io.digitalWrite(USB_SD_RAD_RST, HIGH);
-  delay(100); //remove?
+
+  powerdown_radio();
+
   SD.begin(SD_CS, SPI_SPEED); 
   delay(100);
   nv.deviceMode = TRACK_MODE;
   nv.trackFrame = 0;
+  radio_play = false;
   track_play = true;
   init_track();
   
@@ -453,23 +463,23 @@ void setup()
     else                Serial.println("File System Formatting Error");
   }
 
-  
-  
-
   nv.get_nonVols();
   
-  nv.deviceMode = TRACK_MODE; //force track mode on startup for now...
 
-  listFolders();
-  listFiles();
 
-   
-
+  //init either radio or player...
   if (nv.deviceMode == TRACK_MODE) {
+    Serial.println("INIT TRACK");
+    listFolders();
+    listFiles();
     init_track();
+    track_play = true;
   } else if (nv.deviceMode == RADIO_MODE) {
+    Serial.println("INIT RADIO");
     init_radio();
-    Serial.println("radio inited");
+    listFolders();
+    listFiles();
+    radio_play = true;
   }
 
   updateLED();
@@ -495,10 +505,6 @@ void loop()
       button_tick();
   }
 
-  if (!(ms%100)){
-    adc_set(ADC_PIN_USBVCC);
-    Serial.println(adc_get(ADC_PIN_USBVCC));
-  }
 }}
 
 void track_tick()
@@ -682,14 +688,19 @@ void button_tick()
       }
 
       if(io.digitalRead(SW_POW)){
+        Serial.println("power down sequence...");
+
         //update track frame last second...
-        nv.trackFrame = file->getPos();
+        if (nv.deviceMode == TRACK_MODE) nv.trackFrame = file->getPos();
 
         //set all the params in nonVol memory 
         nv.set_nonVols();
 
         //safely end SPIFFS
         SPIFFS.end();
+
+        //power down radio
+        powerdown_radio();
 
         //play power down jingle
         jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
@@ -839,7 +850,7 @@ void adc_set(int pin)
   (!!(pin & 0b0010)) ? (SCL_HIGH(SCLK)) : (SCL_LOW(SCLK));
   
   //STILL NEED TO ADD 3RD CONTROL LINE...
-  
+
 }
 
 //must always first be set

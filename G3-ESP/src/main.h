@@ -23,6 +23,7 @@ void button_tick();
 void track_tick();
 int set_rad_chan(int chan); 
 int set_rad_vol(int vol);
+int powerdown_radio();
 void displayInfo();
 void updateLED();
 float mapf(float x, float in_min, float in_max, float out_min, float out_max);

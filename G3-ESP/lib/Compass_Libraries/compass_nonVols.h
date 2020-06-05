@@ -13,6 +13,7 @@
 #define DEFAULT_folderIndex     "0"
 #define DEFAULT_trackIndex      "0"
 #define DEFAULT_trackFrame      "0"
+#define DEFAULT_trackFrame      "0"
 
 const int nonVol_size = 5;
 
