@@ -19,6 +19,7 @@ int nonVol::get_nonVols()
     s[2] = DEFAULT_folderIndex;
     s[3] = DEFAULT_trackIndex;
     s[4] = DEFAULT_trackFrame;
+    s[5] = DEFAULT_radioChannel;
     
     //attempt to open SPIFFS file
     File f = SPIFFS.open("/f.txt", "r");
@@ -46,12 +47,14 @@ int nonVol::get_nonVols()
     nonVol::folderIndex = SPIFFS_line_to_int(s[2]); 
     nonVol::trackIndex = SPIFFS_line_to_int(s[3]); 
     nonVol::trackFrame = SPIFFS_line_to_int(s[4]);
+    nonVol::radioChannel = SPIFFS_line_to_int(s[5]);
     
     Serial.println(nonVol::deviceMode);
     Serial.println(nonVol::deviceVolume);
     Serial.println(nonVol::folderIndex);
     Serial.println(nonVol::trackIndex);
     Serial.println(nonVol::trackFrame);
+    Serial.println(nonVol::radioChannel);
 
     return (resp);
     
@@ -76,12 +79,14 @@ int nonVol::set_nonVols()
         f.println(nonVol::folderIndex);
         f.println(nonVol::trackIndex);
         f.println(nonVol::trackFrame);
+        f.println(nonVol::radioChannel);
        
         Serial.println(nonVol::deviceMode);
         Serial.println(nonVol::deviceVolume);
         Serial.println(nonVol::folderIndex);
         Serial.println(nonVol::trackIndex);
         Serial.println(nonVol::trackFrame);
+        Serial.println(nonVol::radioChannel);
 
 
         f.close();

@@ -291,7 +291,7 @@ void init_radio()
   delay(200);
 
   set_rad_vol(nv.deviceVolume);
-  set_rad_chan(channel);
+  set_rad_chan(nv.radioChannel);
 
   radio_play = true;
 
@@ -590,9 +590,9 @@ void button_tick()
           nv.trackFrame = 0;
           init_track();
         } else if (nv.deviceMode == RADIO_MODE) {
-          channel += 20;
-          if (channel > fm_max+1) channel = fm_min;
-          set_rad_chan(channel);
+          nv.radioChannel += 20;
+          if (nv.radioChannel > fm_max+1) nv.radioChannel = fm_min;
+          set_rad_chan(nv.radioChannel);
           displayInfo();
         }
 
@@ -604,9 +604,9 @@ void button_tick()
           nv.trackFrame = 0;
           init_track();
         } else if (nv.deviceMode == RADIO_MODE) {
-          channel -= 20;
-          if (channel < fm_min-1) channel = fm_max;
-          set_rad_chan(channel);
+          nv.radioChannel -= 20;
+          if (nv.radioChannel < fm_min-1) nv.radioChannel = fm_max;
+          set_rad_chan(nv.radioChannel);
           displayInfo();
         }
 
@@ -774,7 +774,7 @@ void updateLED(){
 
 void displayInfo()
 {
-   Serial.print("Channel:"); Serial.print(channel);
+   Serial.print("Channel:"); Serial.print(nv.radioChannel);
    Serial.print("Volume:"); Serial.println(nv.deviceVolume);
 }
 
