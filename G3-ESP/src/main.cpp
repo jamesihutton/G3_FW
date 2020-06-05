@@ -25,7 +25,7 @@
 #include <SD.h>
 // You may need a fast SD card. Set this as high as it will work (40MHz max).
 #define SPI_SPEED   SD_SCK_MHZ(40)
-#define SD_CS       D0
+#define SD_CS       17    //a non-existent pin 
 
 
 #include "string.h"
@@ -497,7 +497,7 @@ void loop()
 
   if (!(ms%100)){
     adc_set(ADC_PIN_USBVCC);
-    Serial.println(adc_get(ADC_PIN_VCC));
+    Serial.println(adc_get(ADC_PIN_USBVCC));
   }
 }}
 
@@ -716,7 +716,7 @@ void readSD()
   Serial.println("switching to SD card...");
 
   //switch ESP SD pins to high impedance
-  pinMode(D0, INPUT);
+  //pinMode(D0, INPUT);  //<-- no longer connected
   pinMode(D5, INPUT);
   pinMode(D6, INPUT);
   pinMode(D7, INPUT);
@@ -834,15 +834,12 @@ ADC_MODE(ADC_TOUT);
 void adc_set(int pin)
 {
     
-  SCL_LOW(SCLK);
-  (!!(pin & 0b0001)) ? (SDA_HIGH(SCLK)) : (SDA_LOW(SCLK));
-  (!!(pin & 0b0010)) ? (SCL_HIGH(SCLK)) : (SCL_LOW(SCLK));
 
-  //digitalWrite(SDA, !!(pin & 0b0001));
-  //digitalWrite(SCL, !!(pin & 0b0010));
-  //digitalWrite(D0,  !!(pin & 0b0100));
-  //digitalWrite(D0, 0);
-  //Wire.begin(SDA, SCL);
+  (!!(pin & 0b0001)) ? (SDA_HIGH(SDA)) : (SDA_LOW(SDA));
+  (!!(pin & 0b0010)) ? (SCL_HIGH(SCLK)) : (SCL_LOW(SCLK));
+  
+  //STILL NEED TO ADD 3RD CONTROL LINE...
+  
 }
 
 //must always first be set
@@ -864,7 +861,7 @@ uint32_t adc_get(int pin)
   switch(pin)
   {
     case ADC_PIN_USBVCC:
-
+      return(adc*11);    // 0.0909090 vdiv (100k->10k)
       break;
     
     case ADC_PIN_CHRG:
