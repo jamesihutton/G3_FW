@@ -16,6 +16,7 @@
 #define		JINGLE_POWER_UP		1
 #define		JINGLE_POWER_DOWN	2
 #define		JINGLE_TICK			3
+#define		JINGLE_CHARGING		4
 
 
 //convert tool: https://tomeko.net/online_tools/file_to_hex.php?lang=en

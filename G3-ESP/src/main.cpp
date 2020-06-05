@@ -60,6 +60,8 @@ static const int fm_addr = B1100011;   //i2c address for si4734
 int SDIO = D2;
 int SCLK = D1;
 
+#define RESET_PIN D0
+
 
 
 int channel = 9470;
@@ -390,7 +392,7 @@ void latchPower()
 }
 
 //DE-LATCHES SUICIDE CIRCUIT BUY SETTING SX1509 OSCIO PIN LOW
-void powerDown()
+void powerDown_device()
 {
   Serial.println("turning off power...");
   io.OSCIO_set(LOW);
@@ -407,16 +409,16 @@ void setup()
   // Set pinModes
   io.init();
   pinMode(D3, INPUT); //!IO_INT pin as input
-  pinMode(D0, OUTPUT);
-  digitalWrite(D0, 0);
 
 
   latchPower();
   Serial.println("power latchedx");
-  delay(100);
-
-
   
+  //what woke the device up?
+  handle_wakeup();
+
+
+
   Serial.println("power - up jingle");
   //play power up jingle
   jingle(JINGLE_POWER_UP, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
@@ -439,7 +441,6 @@ void setup()
 
 
   int resp = SD.begin(SD_CS, SPI_SPEED); 
-  //int resp = SD.begin(D0); 
   if (!resp) {
     while(1){
       Serial.println("\n\nCould not connect to SD card\n\n");
@@ -706,10 +707,25 @@ void button_tick()
         jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
         
         //power down the entire board
-        while(1){
-          powerDown();
-          delay(100);
-        }
+        powerDown_device();
+
+
+        //Check if USB was plugged in
+        adc_set(ADC_PIN_USBVCC);
+        delay(10);
+        if (adc_get(ADC_PIN_USBVCC) > 4500) device_reset();
+
+
+        delay(5000);  //wait for latch circuit to die
+
+        //if still on at this point, USB is keeping on, 
+        //so reset the device and go into charging animation...
+        Serial.println("reseting device...");
+        device_reset();
+        
+        //should never reach this
+        while(1){}
+
       }
   }
 }
@@ -727,7 +743,6 @@ void readSD()
   Serial.println("switching to SD card...");
 
   //switch ESP SD pins to high impedance
-  //pinMode(D0, INPUT);  //<-- no longer connected
   pinMode(D5, INPUT);
   pinMode(D6, INPUT);
   pinMode(D7, INPUT);
@@ -806,6 +821,11 @@ void jingle(int id, float gain)
         case JINGLE_TICK:
             file_progmem = new AudioFileSourcePROGMEM(tick, sizeof(tick));
             break;
+
+        case JINGLE_CHARGING:
+            delay(300);
+            file_progmem = new AudioFileSourcePROGMEM(tick, sizeof(tick));
+            break;
     }
     
     out_progmem = new AudioOutputI2S();
@@ -840,7 +860,7 @@ void jingle(int id, float gain)
 #include <core_esp8266_si2c.cpp>
 
 ADC_MODE(ADC_TOUT);
-#define ADC_SAMPLE_COUNT    10  //read and average this many samples each time
+#define ADC_SAMPLE_COUNT    100  //read and average this many samples each time
 #define ADC_CEILING_MV      972  //mv that corresponds to 1023 in the adc
 void adc_set(int pin)
 {
@@ -890,3 +910,92 @@ uint32_t adc_get(int pin)
   }
 }
 
+
+//DO CERTAIN THINGS BASED ON WHAT WOKE THE DEVICE UP
+void handle_wakeup()
+{
+  //Check if USB was plugged in
+  /*
+  adc_set(ADC_PIN_USBVCC);
+  delay(10);
+  if (adc_get(ADC_PIN_USBVCC) > 4500) charging_loop();
+  */
+ charging_loop();
+
+}
+
+
+//an endless charging animation for the LEDS when plugged in
+//(unless power button is pressed)
+void charging_loop()
+{
+  
+  jingle(JINGLE_CHARGING, DEFAULT_JINGLE_GAIN);
+  
+  int vcc;
+  while(!io.init()){}
+  adc_set(ADC_PIN_VCC);
+  delay(100);
+  while(1){
+    //read battery voltage
+    vcc = adc_get(ADC_PIN_VCC);
+    int percent = vccToPercent(vcc);
+    Serial.printf("vcc = %i \t(%i percent)\n", vcc, percent);
+
+    adc_set(ADC_PIN_USBVCC);
+    //animate LEDs accordingly (switch this to builtin fade eventually...)
+    int breathing_LED = 1;
+    if (percent == 100) breathing_LED = 5;    //doesn't exist... so wont do anything ;)
+    else if (percent >= 75) breathing_LED = 4;
+    else if (percent >= 50) breathing_LED = 3;
+    else if (percent >= 25) breathing_LED = 2;
+    else                    breathing_LED = 1;
+    int i;
+    for (i = 1; i<5; i++) {io.pwm(i,0);} //turn all the LEDs off
+    for (i = 1; i<breathing_LED; i++) {io.pwm(i, 255);}  //turn on the ones below breathing
+    for (i=0; i<255; i++) {
+      //adjust pwm
+      io.pwm(breathing_LED, i); 
+      //check if POW was pressed
+      if(!digitalRead(D3)){ 
+        io.update_pinData();    
+        if(io.digitalRead(SW_POW)) return;  
+      }
+      delay(1);
+    }
+    if (adc_get(ADC_PIN_USBVCC) < 4500) powerDown_device();
+    adc_set(ADC_PIN_VCC);
+
+    for (i=254; i>=0; i--) {
+      //adjust pwm
+      io.pwm(breathing_LED, i); 
+      //check if POW was pressed
+      if(!digitalRead(D3)){ 
+        io.update_pinData();    
+        if(io.digitalRead(SW_POW)) return;  
+      }
+      delay(1);
+    }    
+  }
+}
+
+uint8_t vccToPercent(int vcc)
+{
+  if (vcc > 3400) return 100;
+  else if (vcc > 3324) return 90;
+  else if (vcc > 3320) return 75;
+  else if (vcc > 3290) return 50;
+  else if (vcc > 3240) return 25;
+  else if (vcc > 3185) return 10;
+  else if (vcc > 3050) return 5;
+  else if (vcc > 2700) return 1;
+  else                 return 0;
+}
+
+void device_reset()
+{
+  
+  Serial.println("Reseting device...");
+  ESP.deepSleep(10); 
+  while(1) {}
+}

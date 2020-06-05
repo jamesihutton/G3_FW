@@ -33,4 +33,8 @@ void jingle(int id, float gain);
 
 uint32_t adc_get(int pin);
 void adc_set(int pin);
+void handle_wakeup();
+void charging_loop();
+uint8_t vccToPercent(int vcc);
+void device_reset();
 #endif

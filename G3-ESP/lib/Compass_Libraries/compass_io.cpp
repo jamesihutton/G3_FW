@@ -70,6 +70,13 @@ bool SX1509::init(void)
 	Wire.write(pinState >> 8);         
 	Wire.write(pinState & 0xFF);        
 	Wire.endTransmission();	
+
+	//ENABLE LED DRIVERS 
+	Wire.beginTransmission(SX1509_ADDR);
+	Wire.write(0x20); 
+	Wire.write(DEFAULT_LEDMASK >> 8);    	
+	Wire.write(DEFAULT_LEDMASK & 0xFF);  
+	Wire.endTransmission();	
 	
 	
 	return 1;		//success
@@ -87,9 +94,7 @@ bool SX1509::OSCIO_set(bool state)
 		Wire.beginTransmission(SX1509_ADDR); 
 		Wire.write(0x1E);  
 		Wire.write(B01010000);         //kill power to everything (ESP suicide)
-		Wire.endTransmission(); 
-		delay(5000); 	//wait for suicide circuit cap to drain
-		
+		Wire.endTransmission(); 		
 		return (0); //<--- this should never be reached... if it returns, the power down failed...
 	}
 
@@ -191,4 +196,31 @@ uint16_t SX1509::update_pinData()
 bool SX1509::digitalRead(uint16_t pin)
 {
 	return ((pinData>>pin) & 1);
+}
+
+
+bool SX1509::pwm(uint8_t led, uint8_t intensity)
+{
+	if ((led < 0) || (led > 4)) return 0;
+	
+	Wire.beginTransmission(SX1509_ADDR);
+	switch(led)
+	{
+		case 1:
+			Wire.write(0x45);
+			break;
+		case 2:
+			Wire.write(0x40);
+			break;
+		case 3:
+			Wire.write(0x3B);
+			break;
+		case 4:
+			Wire.write(0x36);
+			break;
+	}
+
+	Wire.write(intensity);         
+	if(!Wire.endTransmission())	return 1;		//success
+	else return 0;
 }
