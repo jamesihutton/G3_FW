@@ -22,7 +22,7 @@ int nonVol::get_nonVols()
     s[5] = DEFAULT_radioChannel;
     
     //attempt to open SPIFFS file
-    File f = SPIFFS.open("/f.txt", "r");
+    File f = SPIFFS.open("/nv.txt", "r");
     if (!f) {
         resp = 0;
         Serial.println("\nspiffs file failed to open");
@@ -64,7 +64,7 @@ int nonVol::get_nonVols()
 int nonVol::set_nonVols()
 {
 
-    File f = SPIFFS.open("/f.txt", "w");
+    File f = SPIFFS.open("/nv.txt", "w");
     if (!f) {
         Serial.println("\nspiffs file failed to open");
         return (0);
