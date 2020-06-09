@@ -401,6 +401,7 @@ bool latchPower()
 void powerDown_device()
 {
   Serial.println("turning off power...");
+  io.reset();   //remove LED drivers
   io.OSCIO_set(LOW);
 }
 
@@ -1029,10 +1030,6 @@ void handle_wakeup()
 void charging_loop()
 {
   int vcc;
-  io.OSCIO_set(0);
-  delay(100);
-  adc_set(ADC_PIN_VCC);
-  delay(100);
   while(1){
     //read battery voltage
     adc_set(ADC_PIN_VCC);
@@ -1069,11 +1066,11 @@ void charging_loop()
     }
     adc_set(ADC_PIN_USBVCC);
     delay(10);
-    int usb = adc_get(ADC_PIN_USBVCC);
-    Serial.println(usb);
-    if (usb < 4500) {
-      delay(10);
-      powerDown_device();
+    if (adc_get(ADC_PIN_USBVCC) < 4500) {
+      while(1){
+        delay(10);
+        powerDown_device();
+      }
     }
     
     for (i=254; i>=0; i--) {
