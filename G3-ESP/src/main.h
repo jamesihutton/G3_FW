@@ -20,6 +20,9 @@
 
 bool latchPower();
 void button_tick();
+
+bool init_radio();
+
 void track_tick();
 int set_rad_chan(int chan); 
 int set_rad_vol(int vol);
@@ -36,4 +39,7 @@ void adc_set(int pin);
 void handle_wakeup();
 void charging_loop();
 uint8_t vccToPercent(int vcc);
+
+void sleep_tick();
+void wakeup_cb();
 #endif

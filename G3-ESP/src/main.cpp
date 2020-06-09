@@ -1,12 +1,24 @@
+ 
+ //needed for sleeping...
+ ////////////////////////////////////////////////////////////////////////////
+extern "C" {
+  #include "user_interface.h"
+}
+extern "C" {
+  #include "gpio.h"
+}
+#include <ESP8266WiFi.h>
 
+// only if you want wifi shut down completely
+// if you dont need wifi, this has lowest wakeup power spike
+RF_MODE(RF_DISABLED);   
+
+#define SLEEP_TIME   15  //light sleep intervals are this many seconds
+ ////////////////////////////////////////////////////////////////////////////
 
 #include <Arduino.h>
-#ifdef ESP32
-  #include <WiFi.h>
-  #include "SPIFFS.h"
-#else
-  #include <ESP8266WiFi.h>
-#endif
+
+
 
 
 
@@ -252,7 +264,7 @@ void init_track()
   //nv.set_nonVols(); //not sure if I want to update every time... only on power down?
 }
 
-void init_radio()
+bool init_radio()
 {
 
   //RESET radio
@@ -268,7 +280,7 @@ void init_radio()
   Wire.write(B00000001);  //0x01  CMD: POWERUP
   Wire.write(B00010000);  //0x10 //external crystal
   Wire.write(0x05);  //0x05
-  Wire.endTransmission();
+  if(Wire.endTransmission()) return 0;  //NACK... failed to connect
   delay(200);
 
   
@@ -296,6 +308,7 @@ void init_radio()
   set_rad_chan(nv.radioChannel);
 
   radio_play = true;
+  return 1; //success
 
 }
 
@@ -348,18 +361,23 @@ int powerdown_radio()
 
 void switch_mode_radio()
 {
-  nv.trackFrame = file->getPos();
-  if (mp3->isRunning()) {
-    mp3->stop();
-  } else if (wav->isRunning()) {
-    wav->stop();
-  }
-  SD.end();
+  
 
-  init_radio();
-  track_play = false;
-  radio_play = true;
-  nv.deviceMode = RADIO_MODE;
+  if(init_radio()) {
+    Serial.println("Radio initted...");
+    track_play = false;
+    radio_play = true;
+    nv.deviceMode = RADIO_MODE;
+    nv.trackFrame = file->getPos();
+    if (mp3->isRunning()) {
+      mp3->stop();
+    } else if (wav->isRunning()) {
+      wav->stop();
+    }
+    SD.end();
+  } else {
+    Serial.println("could not connect to radio...");
+  }
 }
 
 void switch_mode_track()
@@ -445,6 +463,7 @@ void setup()
   }
 
   WiFi.mode(WIFI_OFF);
+  wifi_fpm_set_sleep_type (LIGHT_SLEEP_T);
   WiFi.forceSleepBegin(); //<-- saves like 100mA!
 
   //RESET SD card
@@ -592,6 +611,10 @@ void loop()
       button_tick();
   }
 
+  if (!(ms%1000)){
+    if(nv.deviceMode == RADIO_MODE)  sleep_tick();
+  }
+
 }}
 
 void track_tick()
@@ -616,6 +639,7 @@ void track_tick()
     else {init_track();}
   }
 }
+
 
 void button_tick()
 {
@@ -1104,3 +1128,57 @@ uint8_t vccToPercent(int vcc)
   else                 return 0;
 }
 
+
+//in certain modes (whenever not playing a track) device should go into light sleep periodically
+void sleep_tick()
+{
+  
+    Serial.printf("\nsleeping\n");
+  
+
+  // For some reason, moving timer_list pointer to the end of the list lets us achieve light sleep
+  //Serial.printf("--timers----\n");
+  extern os_timer_t *timer_list;
+  while(timer_list != 0) {
+    /*
+    Serial.printf("address_current= %p\n", timer_list);
+    Serial.printf("timer_expire= %u\n", timer_list->timer_expire);
+    Serial.printf("timer_period= %u\n", timer_list->timer_period);
+    Serial.printf("address_next= %p\n", timer_list->timer_next);
+    Serial.printf("------------\n");
+    */
+
+    // doing the actual disarm doesn't seem to be necessary, and causes stuff to not work
+    //  os_timer_disarm(timer_list);
+    timer_list = timer_list->timer_next;
+  }
+  Serial.flush();
+  
+    
+  wifi_set_opmode_current(NULL_MODE);
+  wifi_fpm_set_sleep_type(LIGHT_SLEEP_T);
+  //gpio_pin_wakeup_enable(GPIO_ID_PIN(0), GPIO_PIN_INTR_HILEVEL); // or LO/ANYLEVEL, no change
+  gpio_pin_wakeup_enable(GPIO_ID_PIN(0), GPIO_PIN_INTR_LOLEVEL);
+  wifi_fpm_open();
+  wifi_fpm_set_wakeup_cb(wakeup_cb);
+  //wifi_fpm_do_sleep(0xFFFFFF);  // works but requires interupt to wake up
+  wifi_fpm_do_sleep(15000 * 1000);
+  delay (15001);
+  
+  // ~7ma for 15 seconds, then ~22ma for 15 seconds (75ma for 5 seconds without forcesleepbegin in callback)
+  // because ticks slow dramatically during sleep, and delay uses ticks to know when its finished
+  // (NOTE: inside the callback function, write and flush something to serial, and the delay() will be interrupted, thanks vlast3k)
+
+  // works, but wipes memory
+  //ESP.deepSleep(15000000);
+}
+
+void wakeup_cb() {
+  wifi_fpm_close();
+  //WiFi.forceSleepBegin();  // if you dont need wifi, ~22ma instead of ~75ma
+  
+  // required here, otherwise the delay after sleep will not be interrupted, thanks vlast3k
+  // see: #6 from https://github.com/esp8266/Arduino/issues/1381#issuecomment-279117473
+  Serial.printf("wakeup_cb\n");
+  Serial.flush();
+}
