@@ -18,7 +18,7 @@
 
 
 
-
+bool latchPower();
 void button_tick();
 void track_tick();
 int set_rad_chan(int chan); 
@@ -36,5 +36,4 @@ void adc_set(int pin);
 void handle_wakeup();
 void charging_loop();
 uint8_t vccToPercent(int vcc);
-void device_reset();
 #endif

@@ -84,19 +84,20 @@ bool SX1509::init(void)
 
 bool SX1509::OSCIO_set(bool state)
 {
+	int resp = 0;
 	if (state == 1){
 		Wire.beginTransmission(SX1509_ADDR); 
 		Wire.write(0x1E);  
 		Wire.write(B01011111);         //set internal osc, set OSCIO to output, and HIGH    ///THIS KEEPS SUICIDE CIRCUIT ENABLED 
-		Wire.endTransmission(); 
+		if(!Wire.endTransmission()) resp = 1;   //success
 	} else {
 		
 		Wire.beginTransmission(SX1509_ADDR); 
 		Wire.write(0x1E);  
 		Wire.write(B01010000);         //kill power to everything (ESP suicide)
-		Wire.endTransmission(); 		
-		return (0); //<--- this should never be reached... if it returns, the power down failed...
+		if(!Wire.endTransmission()) resp = 1;   //success
 	}
+	return resp;
 
 }
 

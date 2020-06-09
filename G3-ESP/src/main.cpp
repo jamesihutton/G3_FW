@@ -380,15 +380,21 @@ void switch_mode_track()
 
 
 //LATCHES SUICIDE CIRCUIT BUY SETTING SX1509 OSCIO PIN HIGH
-void latchPower()
+bool latchPower()
 {
-   //latch power
-  io.OSCIO_set(HIGH);
-  io.OSCIO_set(HIGH);
-  io.OSCIO_set(HIGH);   //5 times for redundancy... ¯\_(ツ)_/¯
-  io.OSCIO_set(HIGH);
-  io.OSCIO_set(HIGH); 
-  Serial.println("power latched");
+  int resp = 0;
+
+  //latch power
+  for (int i = 0; i<10; i++){
+    resp = io.OSCIO_set(HIGH);
+    if (resp) {
+      Serial.println("power latched");
+      return 1;
+    }
+    delay(1);
+  }
+  return 0; //failure after 10 tries
+  
 }
 
 //DE-LATCHES SUICIDE CIRCUIT BUY SETTING SX1509 OSCIO PIN LOW
@@ -409,10 +415,16 @@ void setup()
   // Set pinModes
   io.init();
   pinMode(D3, INPUT); //!IO_INT pin as input
+ 
+  
 
 
-  latchPower();
-  Serial.println("power latchedx");
+  if(latchPower()){
+    Serial.println("power latched...");
+  } else {
+    Serial.println("could not latch power...");
+    delay(1000);
+  }
   
   //what woke the device up?
   handle_wakeup();
@@ -485,6 +497,79 @@ void setup()
 
   updateLED();
 }
+
+
+
+void device_init()
+{
+  Serial.println("power - up jingle");
+  //play power up jingle
+  jingle(JINGLE_POWER_UP, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
+
+
+
+  io.update_pinData();
+  while(io.digitalRead(SW_POW)){  //wait until user releases SW_POW to proceed
+    io.update_pinData();
+    delay(100);
+  }
+
+  WiFi.mode(WIFI_OFF);
+  WiFi.forceSleepBegin(); //<-- saves like 100mA!
+
+  //RESET SD card
+  io.digitalWrite(USB_SD_RAD_RST, LOW);
+  delay(100);
+  io.digitalWrite(USB_SD_RAD_RST, HIGH);
+
+
+  int resp = SD.begin(SD_CS, SPI_SPEED); 
+  if (!resp) {
+    while(1){
+      Serial.println("\n\nCould not connect to SD card\n\n");
+     io.digitalWrite(LED1, 1);io.digitalWrite(LED2, 1);io.digitalWrite(LED3, 1);io.digitalWrite(LED4, 1);
+     delay(400);
+     io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
+     delay(400);
+    }
+  }
+
+    
+
+  //UPDATE NONVOLS
+  //Initialize File System
+  if(SPIFFS.begin())  Serial.println("SPIFFS Initialize....ok");
+  else                Serial.println("SPIFFS Initialization...failed");
+ 
+  //Format File System
+  if(io.digitalRead(SW_Q)){
+    if(SPIFFS.format()) Serial.println("File System Formated");
+    else                Serial.println("File System Formatting Error");
+  }
+
+  nv.get_nonVols();
+  
+
+
+  //init either radio or player...
+  if (nv.deviceMode == TRACK_MODE) {
+    Serial.println("INIT TRACK");
+    listFolders();
+    listFiles();
+    init_track();
+    track_play = true;
+  } else if (nv.deviceMode == RADIO_MODE) {
+    Serial.println("INIT RADIO");
+    init_radio();
+    listFolders();
+    listFiles();
+    radio_play = true;
+  }
+
+  updateLED();
+}
+
+
 
 
 int ms = 0;
@@ -690,41 +775,53 @@ void button_tick()
 
       if(io.digitalRead(SW_POW)){
         Serial.println("power down sequence...");
-
+        
         //update track frame last second...
         if (nv.deviceMode == TRACK_MODE) nv.trackFrame = file->getPos();
 
         //set all the params in nonVol memory 
         nv.set_nonVols();
 
-        //safely end SPIFFS
-        SPIFFS.end();
-
         //power down radio
         powerdown_radio();
+        
+        //SD.end();
 
         //play power down jingle
         jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
-        
-        //power down the entire board
-        powerDown_device();
 
-
-        //Check if USB was plugged in
+        //Check if USB is plugged in
         adc_set(ADC_PIN_USBVCC);
-        delay(10);
-        if (adc_get(ADC_PIN_USBVCC) > 4500) device_reset();
+        delay(100);
+        if (adc_get(ADC_PIN_USBVCC) > 4500) {
+          
+          Serial.println("charging loop");
+          charging_loop();
+
+          
+          Serial.println("resuming playback");
+          //when returned, resume...
+          //init either radio or player...
+          device_init();
 
 
-        delay(5000);  //wait for latch circuit to die
+        } else {
 
-        //if still on at this point, USB is keeping on, 
-        //so reset the device and go into charging animation...
-        Serial.println("reseting device...");
-        device_reset();
-        
-        //should never reach this
-        while(1){}
+          //safely end SPIFFS
+          SPIFFS.end();
+
+          //power down board
+          io.OSCIO_set(LOW);
+          delay(5000);  //wait for latch circuit to die
+
+          //if still on at this point, USB is keeping on, 
+          //so reset the device and go into charging animation...
+          Serial.println("reseting device...");
+          ESP.restart();
+          
+          //should never reach this
+          while(1){}
+        }
 
       }
   }
@@ -824,7 +921,7 @@ void jingle(int id, float gain)
 
         case JINGLE_CHARGING:
             delay(300);
-            file_progmem = new AudioFileSourcePROGMEM(tick, sizeof(tick));
+            file_progmem = new AudioFileSourcePROGMEM(charging, sizeof(charging));
             break;
     }
     
@@ -914,13 +1011,15 @@ uint32_t adc_get(int pin)
 //DO CERTAIN THINGS BASED ON WHAT WOKE THE DEVICE UP
 void handle_wakeup()
 {
+  
   //Check if USB was plugged in
-  /*
   adc_set(ADC_PIN_USBVCC);
   delay(10);
-  if (adc_get(ADC_PIN_USBVCC) > 4500) charging_loop();
-  */
- charging_loop();
+  if (adc_get(ADC_PIN_USBVCC) > 4500) {
+    jingle(JINGLE_CHARGING, 0.75);
+    charging_loop();
+  }
+
 
 }
 
@@ -929,20 +1028,18 @@ void handle_wakeup()
 //(unless power button is pressed)
 void charging_loop()
 {
-  
-  jingle(JINGLE_CHARGING, DEFAULT_JINGLE_GAIN);
-  
   int vcc;
-  while(!io.init()){}
+  io.OSCIO_set(0);
+  delay(100);
   adc_set(ADC_PIN_VCC);
   delay(100);
   while(1){
     //read battery voltage
+    adc_set(ADC_PIN_VCC);
+    delay(10);
     vcc = adc_get(ADC_PIN_VCC);
     int percent = vccToPercent(vcc);
     Serial.printf("vcc = %i \t(%i percent)\n", vcc, percent);
-
-    adc_set(ADC_PIN_USBVCC);
     //animate LEDs accordingly (switch this to builtin fade eventually...)
     int breathing_LED = 1;
     if (percent == 100) breathing_LED = 5;    //doesn't exist... so wont do anything ;)
@@ -950,6 +1047,9 @@ void charging_loop()
     else if (percent >= 50) breathing_LED = 3;
     else if (percent >= 25) breathing_LED = 2;
     else                    breathing_LED = 1;
+
+    breathing_LED = 2; // force 2 for now...
+
     int i;
     for (i = 1; i<5; i++) {io.pwm(i,0);} //turn all the LEDs off
     for (i = 1; i<breathing_LED; i++) {io.pwm(i, 255);}  //turn on the ones below breathing
@@ -959,25 +1059,40 @@ void charging_loop()
       //check if POW was pressed
       if(!digitalRead(D3)){ 
         io.update_pinData();    
-        if(io.digitalRead(SW_POW)) return;  
+        if(io.digitalRead(SW_POW)) {
+          latchPower();
+          return;
+        }
+          
       }
       delay(1);
     }
-    if (adc_get(ADC_PIN_USBVCC) < 4500) powerDown_device();
-    adc_set(ADC_PIN_VCC);
-
+    adc_set(ADC_PIN_USBVCC);
+    delay(10);
+    int usb = adc_get(ADC_PIN_USBVCC);
+    Serial.println(usb);
+    if (usb < 4500) {
+      delay(10);
+      powerDown_device();
+    }
+    
     for (i=254; i>=0; i--) {
       //adjust pwm
       io.pwm(breathing_LED, i); 
       //check if POW was pressed
       if(!digitalRead(D3)){ 
         io.update_pinData();    
-        if(io.digitalRead(SW_POW)) return;  
+        if(io.digitalRead(SW_POW)) {
+          latchPower();
+          return;  
+        }
       }
       delay(1);
     }    
   }
 }
+
+
 
 uint8_t vccToPercent(int vcc)
 {
@@ -992,10 +1107,3 @@ uint8_t vccToPercent(int vcc)
   else                 return 0;
 }
 
-void device_reset()
-{
-  
-  Serial.println("Reseting device...");
-  ESP.deepSleep(10); 
-  while(1) {}
-}
