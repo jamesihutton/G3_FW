@@ -13,19 +13,21 @@
 #define DEFAULT_folderIndex     "0"
 #define DEFAULT_trackIndex      "0"
 #define DEFAULT_trackFrame      "0"
+#define DEFAULT_radioChannel    "9470"
 
-const int nonVol_size = 5;
+const int nonVol_size = 6;
 
 class nonVol
 {
     private:
 
     public:
-        int deviceMode;           //mode of the device (mp3 = 0, radio = 1)
-        int deviceVolume;         //current volume
-        int folderIndex;      //Index of the current folder
-        int trackIndex;       //Index of the current track in the folder
-        int trackFrame;     //frame of current track (position)
+        int deviceMode;             //mode of the device (mp3 = 0, radio = 1)
+        int deviceVolume;           //current volume
+        int folderIndex;            //Index of the current folder
+        int trackIndex;             //Index of the current track in the folder
+        int trackFrame;             //frame of current track (position)
+        int radioChannel;           //frame of current track (position)
         
         /**********************************************************
          * when adding parameters, ensure you also add them to 

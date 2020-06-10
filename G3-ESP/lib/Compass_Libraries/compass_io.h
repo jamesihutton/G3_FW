@@ -36,8 +36,17 @@
 //-------------------------------------------------------------------
 
 
-#define			DEFAULT_PINDIR		0b1111111100001100			//set pins 0,1,4,5,6,7 as outputs
-#define			DEFAULT_PINSTATE	0b0000000000000010			//LEDs all on (LOW), !USB_SD_RAD_RST (HIGH), MUX_SEL (LOW)
+
+#define			DEFAULT_LEDMASK			0b0000000011110011			//LEDs on pins 4,5,6,7
+
+#define			DEFAULT_INTMASK			0b0000000011110011			//0's enabled to interrupt
+
+#define			DEFAULT_SENSE_B			0b0101010101010101			//sets the correct inputs to int on rising edge
+#define			DEFAULT_SENSE_A			0b0000000001010000
+
+
+#define			DEFAULT_PINDIR			0b1111111100001100			//set pins 0,1,4,5,6,7 as outputs
+#define			DEFAULT_PINSTATE		0b0000000000000010			//LEDs all off (HIGH), !USB_SD_RAD_RST (HIGH), MUX_SEL (LOW)
 
 
 class SX1509
@@ -65,6 +74,8 @@ public:
 	uint16_t update_pinData();										//read all the input pins  to "pinData"
 	
 	bool digitalRead(uint16_t pin);							//simply returns the pinData for that pin...MUST UPDATE BEFORE READING!
+
+	bool pwm(uint8_t led, uint8_t intensity);
 };
 
 typedef SX1509 sx1509Class;

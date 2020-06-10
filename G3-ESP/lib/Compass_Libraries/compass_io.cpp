@@ -27,6 +27,25 @@ bool SX1509::init(void)
 	Wire.write(0x1F); 
 	Wire.write(0x10);         //Sets CLK = fOSC, (needed for PWM), (set to 0x00 if PWM not needed)
 	Wire.endTransmission();
+
+	//SET RegInterruptMask
+	Wire.beginTransmission(SX1509_ADDR);
+	Wire.write(0x12); 
+	Wire.write(DEFAULT_INTMASK >> 8);    	//sets all the inputs as interrupts
+	Wire.write(DEFAULT_INTMASK & 0xFF); 
+
+	Wire.write(DEFAULT_SENSE_B >> 8);    	//sets the correct inputs to int on rising edge
+	Wire.write(DEFAULT_SENSE_B & 0xFF);  
+	Wire.write(DEFAULT_SENSE_A >> 8);    	
+	Wire.write(DEFAULT_SENSE_A & 0xFF);  
+	Wire.endTransmission();
+
+	//SET RegDebounce
+	Wire.beginTransmission(SX1509_ADDR);
+	Wire.write(0x23);
+	Wire.write(0xFF);		//enable debounce for all inputs
+	Wire.write(0xFF);
+	Wire.endTransmission();
 	
 	
 	//SET RegDirB and RegDirA (pinModes)
@@ -35,7 +54,7 @@ bool SX1509::init(void)
 	Wire.write(pinDir >> 8);         
 	Wire.write(pinDir & 0xFF);         
 	Wire.endTransmission();
-	Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.println(pinDir & 0xFF, BIN);
+	
 
 	//enable pulldowns on inputs
 	Wire.beginTransmission(SX1509_ADDR);
@@ -43,7 +62,7 @@ bool SX1509::init(void)
 	Wire.write(pinDir >> 8);         
 	Wire.write(pinDir & 0xFF);         
 	Wire.endTransmission();
-	Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.println(pinDir & 0xFF, BIN);
+	
 	
 	//SET  RegDataB and RegDataA 
 	Wire.beginTransmission(SX1509_ADDR);
@@ -51,6 +70,14 @@ bool SX1509::init(void)
 	Wire.write(pinState >> 8);         
 	Wire.write(pinState & 0xFF);        
 	Wire.endTransmission();	
+
+	//ENABLE LED DRIVERS 
+	Wire.beginTransmission(SX1509_ADDR);
+	Wire.write(0x20); 
+	Wire.write(DEFAULT_LEDMASK >> 8);    	
+	Wire.write(DEFAULT_LEDMASK & 0xFF);  
+	Wire.endTransmission();	
+	
 	
 	
 	return 1;		//success
@@ -58,21 +85,20 @@ bool SX1509::init(void)
 
 bool SX1509::OSCIO_set(bool state)
 {
+	int resp = 0;
 	if (state == 1){
 		Wire.beginTransmission(SX1509_ADDR); 
 		Wire.write(0x1E);  
 		Wire.write(B01011111);         //set internal osc, set OSCIO to output, and HIGH    ///THIS KEEPS SUICIDE CIRCUIT ENABLED 
-		Wire.endTransmission(); 
+		if(!Wire.endTransmission()) resp = 1;   //success
 	} else {
 		
 		Wire.beginTransmission(SX1509_ADDR); 
 		Wire.write(0x1E);  
 		Wire.write(B01010000);         //kill power to everything (ESP suicide)
-		Wire.endTransmission(); 
-		delay(5000); 	//wait for suicide circuit cap to drain
-		
-		return (0); //<--- this should never be reached... if it returns, the power down failed...
+		if(!Wire.endTransmission()) resp = 1;   //success
 	}
+	return resp;
 
 }
 
@@ -105,7 +131,7 @@ bool SX1509::pinMode(uint16_t pin, bool dir)
 	Wire.write(pinDir & 0xFF);         
 	if(!Wire.endTransmission()) resp = 1;   //success
 
- Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.print(pinDir & 0xFF, BIN);
+ 
 
   //If input, set to pull-downs to avoid need for resistors on PCB 
   if (dir == 1) {
@@ -114,7 +140,7 @@ bool SX1509::pinMode(uint16_t pin, bool dir)
     Wire.write(pinDir >> 8);         //these regs should match pinDir reg, since INPUT = 1, and pulldown = 1
     Wire.write(pinDir & 0xFF);         
     if(!Wire.endTransmission()) resp = 1;   //success
-    Serial.print(pinDir>>8, BIN); Serial.print('\t'); Serial.print(pinDir & 0xFF, BIN);
+
   }
 	
 	return resp;
@@ -150,6 +176,12 @@ uint16_t SX1509::get_pinState_raw()
 	return pinState;
 }
 
+
+/*
+NOTE:
+This retrieves the current pinData as it is when read, not as it was when trigger happened!
+Trigger from SX is simply meant as a "hey, read me" message to ESP
+*/
 uint16_t SX1509::update_pinData()
 {
 	Wire.beginTransmission(SX1509_ADDR);
@@ -166,4 +198,31 @@ uint16_t SX1509::update_pinData()
 bool SX1509::digitalRead(uint16_t pin)
 {
 	return ((pinData>>pin) & 1);
+}
+
+
+bool SX1509::pwm(uint8_t led, uint8_t intensity)
+{
+	if ((led < 0) || (led > 4)) return 0;
+	
+	Wire.beginTransmission(SX1509_ADDR);
+	switch(led)
+	{
+		case 1:
+			Wire.write(0x45);
+			break;
+		case 2:
+			Wire.write(0x40);
+			break;
+		case 3:
+			Wire.write(0x3B);
+			break;
+		case 4:
+			Wire.write(0x36);
+			break;
+	}
+
+	Wire.write(intensity);         
+	if(!Wire.endTransmission())	return 1;		//success
+	else return 0;
 }
