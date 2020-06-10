@@ -1087,6 +1087,8 @@ void handle_wakeup()
 //(unless power button is pressed)
 void charging_loop()
 {
+  io.init();
+  io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
   int vcc;
   while(1){
     //read battery voltage
