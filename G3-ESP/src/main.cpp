@@ -217,7 +217,6 @@ void init_track()
     }
   }
   char s[100] = "";
-
   int i;
   for (i = 0; i<100; i++)
   {
@@ -385,7 +384,7 @@ int powerdown_radio()
 
 void switch_mode_radio()
 {
-  
+  Serial.println("switching to radio mode");
 
   if(init_radio()) {
     Serial.println("Radio initted...");
@@ -399,6 +398,7 @@ void switch_mode_radio()
       wav->stop();
     }
     SD.end();
+    track_initialized = 0;
   } else {
     Serial.println("could not connect to radio...");
   }
@@ -406,17 +406,15 @@ void switch_mode_radio()
 
 void switch_mode_track()
 {
-
+  digitalWrite(MUTE_PIN, MUTE);
   powerdown_radio();
-
   SD.begin(SD_CS, SPI_SPEED); 
   delay(100);
   nv.deviceMode = TRACK_MODE;
-  nv.trackFrame = 0;
   radio_play = false;
   track_play = true;
   init_track();
-  
+  Serial.println("track initted");
 }
 
 
