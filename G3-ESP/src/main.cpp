@@ -81,7 +81,7 @@ int channel = 9470;
 #define fm_min  6410
 char rdsBuffer[10];
 
-#define TRACK_MAX_GAIN    0.75   //
+#define TRACK_MAX_GAIN    1.5   //
 #define TRACK_MIN_GAIN    0.01   //
 
 #define RADIO_MAX_GAIN    63    
@@ -280,9 +280,13 @@ void init_track()
   //nv.set_nonVols(); //not sure if I want to update every time... only on power down?
 }
 
+
+#define   MUTE_RADIO_MS   1  //amount of ms to mute amp when switching to radio mode (to avoid pop)
 bool init_radio()
 {
 
+  digitalWrite(MUTE_PIN, MUTE);   //mute during init to avoid pops
+  
   //RESET radio
   io.digitalWrite(USB_SD_RAD_RST, LOW);
   delay(10);
@@ -324,6 +328,10 @@ bool init_radio()
   set_rad_chan(nv.radioChannel);
 
   radio_play = true;
+
+  delay(MUTE_RADIO_MS);
+  digitalWrite(MUTE_PIN, UNMUTE);
+
   return 1; //success
 
 }
@@ -463,6 +471,8 @@ void setup()
     Serial.println("could not latch power...");
     delay(1000);
   }
+
+  powerdown_radio();  //can remove if not debugging...
   
   //what woke the device up?
   handle_wakeup();
@@ -1067,7 +1077,7 @@ void handle_wakeup()
   adc_set(ADC_PIN_USBVCC);
   delay(10);
   if (adc_get(ADC_PIN_USBVCC) > 4500) {
-    jingle(JINGLE_CHARGING, 0.75);
+    jingle(JINGLE_CHARGING, 0.99);
     charging_loop();
   }
 

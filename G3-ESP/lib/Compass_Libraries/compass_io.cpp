@@ -72,13 +72,12 @@ bool SX1509::init(void)
 	Wire.endTransmission();	
 
 	//ENABLE LED DRIVERS 
-	/*
 	Wire.beginTransmission(SX1509_ADDR);
 	Wire.write(0x20); 
 	Wire.write(DEFAULT_LEDMASK >> 8);    	
 	Wire.write(DEFAULT_LEDMASK & 0xFF);  
 	Wire.endTransmission();	
-	*/
+	
 	
 	
 	return 1;		//success
