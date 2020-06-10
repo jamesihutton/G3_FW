@@ -72,7 +72,7 @@ static const int fm_addr = B1100011;   //i2c address for si4734
 int SDIO = D2;
 int SCLK = D1;
 
-#define RESET_PIN D0
+#define MUTE_PIN D0
 
 
 
@@ -201,8 +201,14 @@ void listFiles()
   track_count = i;
 }
 
+#define MUTE          1
+#define UNMUTE        0
+#define MUTE_MS       0   //the amount of ms to mute into each track (to avoid "click")
+#define PRE_MUTE_MS   100 //the amount of ms to mute BEFORE each track
 void init_track()
 {
+  digitalWrite(MUTE_PIN, MUTE); //mute amp
+  delay(PRE_MUTE_MS);
   if (track_initialized){
     if (mp3->isRunning()) {
       mp3->stop();
@@ -259,7 +265,17 @@ void init_track()
   out->SetGain(track_gain);
   Serial.print("\ngain = ");
   Serial.println(track_gain);
-
+  
+  //mute amp for "MUTE_MS" milliseconds into track (to avoid "click")
+  int start_time = millis();
+  while(1){
+    if (millis() >= (start_time + MUTE_MS)){
+      digitalWrite(MUTE_PIN, UNMUTE);
+      break;
+    }
+    ESP.wdtFeed();
+    track_tick();
+  }
   
   //nv.set_nonVols(); //not sure if I want to update every time... only on power down?
 }
@@ -434,6 +450,9 @@ void setup()
   // Set pinModes
   io.init();
   pinMode(D3, INPUT); //!IO_INT pin as input
+
+  pinMode(MUTE_PIN, OUTPUT);
+  digitalWrite(MUTE_PIN, 0);
  
   
 
@@ -591,7 +610,7 @@ void device_init()
 
 
 
-
+int mute = 0;
 int ms = 0;
 int last_ms = 0;
 void loop()
@@ -611,6 +630,8 @@ void loop()
       button_tick();
       if(nv.deviceMode == RADIO_MODE)  sleep_tick();
   }
+
+
 
   
 
@@ -927,6 +948,8 @@ AudioOutputI2S *out_progmem;
 
 void jingle(int id, float gain)
 {
+    digitalWrite(MUTE_PIN, MUTE);
+    delay(PRE_MUTE_MS);
     audioLogger = &Serial;
     switch(id)
     {
@@ -948,27 +971,31 @@ void jingle(int id, float gain)
             file_progmem = new AudioFileSourcePROGMEM(charging, sizeof(charging));
             break;
     }
-    
     out_progmem = new AudioOutputI2S();
     wav_progmem = new AudioGeneratorWAV();
     wav_progmem->begin(file_progmem, out_progmem);
     out_progmem->SetGain(gain);
+
+    //mute for a few ms to avoid pop
+    int start_time = millis();
     while(1){
         if (wav_progmem->isRunning()){
+            if (millis() >= (start_time + MUTE_MS)){
+              digitalWrite(MUTE_PIN, UNMUTE);
+            }
             if (!wav_progmem->loop()){
+            digitalWrite(MUTE_PIN, MUTE); //mute amp
             wav_progmem->stop();
             return;
-            } 
+            }
+          ESP.wdtFeed();
         }
-        /*
-        if (track_play && (id == JINGLE_TICK)){
-          if (wav->isRunning()) wav->loop();
-          if (mp3->isRunning()) mp3->loop();
-        }*/
 
-
-        ESP.wdtFeed();
     }
+
+
+    //mute amp for "MUTE_MS" milliseconds into track (to avoid "click")
+  
 }
 
 
