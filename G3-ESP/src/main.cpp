@@ -1,5 +1,4 @@
- 
- //needed for sleeping...
+  //needed for sleeping...
  ////////////////////////////////////////////////////////////////////////////
 extern "C" {
   #include "user_interface.h"
@@ -864,6 +863,7 @@ void button_tick()
           SPIFFS.end();
 
           //power down board
+          io.reset();
           io.OSCIO_set(LOW);
           delay(5000);  //wait for latch circuit to die
 
