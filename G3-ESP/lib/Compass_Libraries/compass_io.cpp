@@ -203,7 +203,6 @@ bool SX1509::digitalRead(uint16_t pin)
 
 bool SX1509::pwm(uint8_t led, uint8_t intensity)
 {
-	return (1);
 	if ((led < 0) || (led > 4)) return 0;
 	
 	Wire.beginTransmission(SX1509_ADDR);

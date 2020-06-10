@@ -1103,8 +1103,6 @@ void charging_loop()
     else if (percent >= 25) breathing_LED = 2;
     else                    breathing_LED = 1;
 
-    breathing_LED = 2; // force 2 for now...
-
     int i;
     for (i = 1; i<5; i++) {io.pwm(i,0);} //turn all the LEDs off
     for (i = 1; i<breathing_LED; i++) {io.pwm(i, 255);}  //turn on the ones below breathing
@@ -1116,6 +1114,7 @@ void charging_loop()
         io.update_pinData();    
         if(io.digitalRead(SW_POW)) {
           latchPower();
+          for (i = 1; i<=4; i++) {io.pwm(i, 255);}  //enable all LEDs
           return;
         }
           
@@ -1151,8 +1150,8 @@ void charging_loop()
 
 uint8_t vccToPercent(int vcc)
 {
-  if (vcc > 3400) return 100;
-  else if (vcc > 3324) return 90;
+  if (vcc > 3620) return 100;
+  else if (vcc > 3400) return 90;
   else if (vcc > 3320) return 75;
   else if (vcc > 3290) return 50;
   else if (vcc > 3240) return 25;
