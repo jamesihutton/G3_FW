@@ -77,7 +77,8 @@ int SCLK = D1;
 
 int channel = 9470;
 #define fm_max 10790
-#define fm_min  6410
+#define fm_min  8790
+//#define fm_min  6410  //can go lower than general fm channels on fm mode...
 char rdsBuffer[10];
 
 #define TRACK_MAX_GAIN    1.5   //
