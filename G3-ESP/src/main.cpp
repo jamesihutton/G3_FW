@@ -609,11 +609,10 @@ void loop()
 
   if (!(ms%5)){
       button_tick();
+      if(nv.deviceMode == RADIO_MODE)  sleep_tick();
   }
 
-  if (!(ms%1000)){
-    if(nv.deviceMode == RADIO_MODE)  sleep_tick();
-  }
+  
 
 }}
 
@@ -1162,8 +1161,8 @@ void sleep_tick()
   wifi_fpm_open();
   wifi_fpm_set_wakeup_cb(wakeup_cb);
   //wifi_fpm_do_sleep(0xFFFFFF);  // works but requires interupt to wake up
-  wifi_fpm_do_sleep(15000 * 1000);
-  delay (15001);
+  wifi_fpm_do_sleep(120000 * 1000);
+  delay (120001);
   
   // ~7ma for 15 seconds, then ~22ma for 15 seconds (75ma for 5 seconds without forcesleepbegin in callback)
   // because ticks slow dramatically during sleep, and delay uses ticks to know when its finished
