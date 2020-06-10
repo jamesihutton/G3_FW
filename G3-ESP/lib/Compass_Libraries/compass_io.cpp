@@ -72,11 +72,13 @@ bool SX1509::init(void)
 	Wire.endTransmission();	
 
 	//ENABLE LED DRIVERS 
+	/*
 	Wire.beginTransmission(SX1509_ADDR);
 	Wire.write(0x20); 
 	Wire.write(DEFAULT_LEDMASK >> 8);    	
 	Wire.write(DEFAULT_LEDMASK & 0xFF);  
 	Wire.endTransmission();	
+	*/
 	
 	
 	return 1;		//success
@@ -202,6 +204,7 @@ bool SX1509::digitalRead(uint16_t pin)
 
 bool SX1509::pwm(uint8_t led, uint8_t intensity)
 {
+	return (1);
 	if ((led < 0) || (led > 4)) return 0;
 	
 	Wire.beginTransmission(SX1509_ADDR);
