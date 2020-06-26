@@ -286,10 +286,22 @@ bool init_radio()
 
   digitalWrite(MUTE_PIN, MUTE);   //mute during init to avoid pops
   
-  //RESET radio
+  //RESET radio (and SD card...)
+  SD.end();
   io.digitalWrite(USB_SD_RAD_RST, LOW);
   delay(10);
   io.digitalWrite(USB_SD_RAD_RST, HIGH);
+
+  int resp = SD.begin(SD_CS, SPI_SPEED); //SD card must now be restarted, since doing this toggled it's power
+  if (!resp) {
+    while(1){
+      Serial.println("\n\nCould not connect to SD card\n\n");
+     io.digitalWrite(LED1, 1);io.digitalWrite(LED2, 1);io.digitalWrite(LED3, 1);io.digitalWrite(LED4, 1);
+     delay(400);
+     io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
+     delay(400);
+    }
+  } 
 
   Wire.begin(SDIO, SCLK);  //SDA, SCL
   delay(200); //remove?
