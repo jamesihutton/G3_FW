@@ -67,7 +67,7 @@ AudioFileSourceID3 *id3;
 
 
 
-static const int fm_addr = B1100011;   //i2c address for si4734
+static const int fm_addr = 0x11;   //i2c address for si4734 (0x63 for SEN = HIGH, 0x11 for SEN = LOW)
 int SDIO = D2;
 int SCLK = D1;
 
