@@ -34,6 +34,7 @@ RF_MODE(RF_DISABLED);
 #include <twi.h>
 #include <SPI.h>
 #include <SD.h>
+#include "LittleFS.h"
 // You may need a fast SD card. Set this as high as it will work (40MHz max).
 #define SPI_SPEED   SD_SCK_MHZ(40)
 #define SD_CS       17    //a non-existent pin 
@@ -526,12 +527,12 @@ void setup()
 
   //UPDATE NONVOLS
   //Initialize File System
-  if(SPIFFS.begin())  Serial.println("SPIFFS Initialize....ok");
+  if(LittleFS.begin())  Serial.println("SPIFFS Initialize....ok");
   else                Serial.println("SPIFFS Initialization...failed");
  
   //Format File System
   if(io.digitalRead(SW_Q)){
-    if(SPIFFS.format()) Serial.println("File System Formated");
+    if(LittleFS.format()) Serial.println("File System Formated");
     else                Serial.println("File System Formatting Error");
   }
 
@@ -597,12 +598,12 @@ void device_init()
 
   //UPDATE NONVOLS
   //Initialize File System
-  if(SPIFFS.begin())  Serial.println("SPIFFS Initialize....ok");
+  if(LittleFS.begin())  Serial.println("SPIFFS Initialize....ok");
   else                Serial.println("SPIFFS Initialization...failed");
  
   //Format File System
   if(io.digitalRead(SW_Q)){
-    if(SPIFFS.format()) Serial.println("File System Formated");
+    if(LittleFS.format()) Serial.println("File System Formated");
     else                Serial.println("File System Formatting Error");
   }
 
@@ -831,7 +832,7 @@ void button_tick()
         nv.set_nonVols();
 
         //safely end SPIFFS
-        SPIFFS.end();
+        LittleFS.end();
         
         readSD();
         
@@ -873,7 +874,7 @@ void button_tick()
         } else {
 
           //safely end SPIFFS
-          SPIFFS.end();
+          LittleFS.end();
 
           //power down board
           io.reset();
