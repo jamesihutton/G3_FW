@@ -42,4 +42,6 @@ uint8_t vccToPercent(int vcc);
 
 void sleep_tick();
 void wakeup_cb();
+
+int save_file_pos();
 #endif

@@ -56,6 +56,7 @@ int nonVol::get_nonVols()
     Serial.println(nonVol::trackFrame);
     Serial.println(nonVol::radioChannel);
 
+    f.close();
     return (resp);
     
 }

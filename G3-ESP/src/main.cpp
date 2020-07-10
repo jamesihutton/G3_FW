@@ -26,6 +26,7 @@ RF_MODE(RF_DISABLED);
 #include "compass_io.h" 
 #include "compass_nonVols.h"
 #include "compass_jingles.h"
+#include "compass_track_NV.h"
 
 
 
@@ -255,9 +256,11 @@ void init_track()
     wav->begin(id3, out);
   }
 
-
-  file->seek(nv.trackFrame, SEEK_SET);
-  Serial.println("@FRAME: "); Serial.println(nv.trackFrame);
+  int frame = track_nv_getFrame(nv.folderIndex, nv.trackIndex);
+  if (frame>0) {
+    file->seek(frame, SEEK_SET);
+    Serial.println("@FRAME: "); Serial.println(nv.trackFrame);
+  }
   track_initialized = true; //raised forever after first init
 
 
@@ -737,6 +740,7 @@ void button_tick()
       }
       if(io.digitalRead(SW_RIGHT)){
         if (nv.deviceMode == TRACK_MODE) {
+          save_file_pos();
           nv.trackIndex++;
           if (nv.trackIndex >= (track_count)) nv.trackIndex = 0;  //loop back to 0 after last song
           nv.trackFrame = 0;
@@ -751,6 +755,7 @@ void button_tick()
       }
       if(io.digitalRead(SW_LEFT)){
         if (nv.deviceMode == TRACK_MODE) {
+          save_file_pos();
           nv.trackIndex--; 
           if (nv.trackIndex < 0) nv.trackIndex = track_count-1;  //loop to last song
           nv.trackFrame = 0;
@@ -1240,4 +1245,20 @@ void wakeup_cb() {
   // see: #6 from https://github.com/esp8266/Arduino/issues/1381#issuecomment-279117473
   Serial.printf("wakeup_cb\n");
   Serial.flush();
+}
+
+
+
+
+int save_file_pos()
+{
+  if (track_initialized){
+    if (mp3->isRunning()) {
+      //save position to track_nv
+      return track_nv_setFrame(nv.folderIndex, nv.trackIndex, file->getPos());
+    } else if (wav->isRunning()) {
+      //save position to track_nv
+      return track_nv_setFrame(nv.folderIndex, nv.trackIndex, file->getPos());
+    }
+  }
 }
