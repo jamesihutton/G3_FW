@@ -1037,6 +1037,7 @@ void adc_set(int pin)
 
   (!!(pin & 0b0001)) ? (SDA_HIGH(SDA)) : (SDA_LOW(SDA));
   (!!(pin & 0b0010)) ? (SCL_HIGH(SCLK)) : (SCL_LOW(SCLK));
+  (!!(pin & 0b0100)) ? (digitalWrite(D0, HIGH)) : (digitalWrite(D0, LOW));
   
   //STILL NEED TO ADD 3RD CONTROL LINE...
 
@@ -1048,7 +1049,7 @@ uint32_t adc_get(int pin)
 {
   uint32_t adc = 0;
 
-  //average 1000 readings
+  //average "ADC_SAMPLE_COUNT" x readings
   for (int i = 0; i<ADC_SAMPLE_COUNT; i++){
     adc += analogRead(A0);
   } 
@@ -1061,22 +1062,31 @@ uint32_t adc_get(int pin)
   switch(pin)
   {
     case ADC_PIN_USBVCC:
-      return(adc*11);    // 0.0909090 vdiv (100k->10k)
+      adc*=11;    // 0.0909090 vdiv (100k->10k)
       break;
     
     case ADC_PIN_CHRG:
-
       break;
     
     case ADC_PIN_HPDET:
-
       break;
     
     case ADC_PIN_VCC:
-      return(adc*4);    // 1/4vdiv
+      adc*=4;    // 1/4vdiv
+      break;
+
+    case ADC_PIN_DCHRG:
+      break;
+
+    case ADC_PIN_BRDID:
+      break;
+
+    case ADC_PIN_SOLAR:
+      adc*=7.383; //30k, 4.7k vdiv
       break;
   
   }
+  return(adc);
 }
 
 
