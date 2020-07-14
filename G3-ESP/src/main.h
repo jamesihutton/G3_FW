@@ -44,4 +44,5 @@ void sleep_tick();
 void wakeup_cb();
 
 int save_file_pos();
+int clear_saved_file_pos();
 #endif

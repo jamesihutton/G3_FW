@@ -92,7 +92,7 @@ char rdsBuffer[10];
 #define MAX_DEVICE_VOL    15    //used for both Radio and MP3 nv.deviceVolume!
 float track_gain = 0.3;     //starting level
 
-
+#define track_rollback  40000 // ~1sec into track for 128kbps
 
 
 
@@ -755,11 +755,16 @@ void button_tick()
       }
       if(io.digitalRead(SW_LEFT)){
         if (nv.deviceMode == TRACK_MODE) {
-          save_file_pos();
-          nv.trackIndex--; 
-          if (nv.trackIndex < 0) nv.trackIndex = track_count-1;  //loop to last song
-          nv.trackFrame = 0;
-          init_track();
+          //if ((file->getPos()) > track_rollback){
+            //clear_saved_file_pos();
+            //init_track();
+          //} else {
+            save_file_pos();
+            nv.trackIndex--; 
+            if (nv.trackIndex < 0) nv.trackIndex = track_count-1;  //loop to last song
+            nv.trackFrame = 0;
+            init_track();
+        //}
         } else if (nv.deviceMode == RADIO_MODE) {
           nv.radioChannel -= 20;
           if (nv.radioChannel < fm_min-1) nv.radioChannel = fm_max;
@@ -1259,6 +1264,19 @@ int save_file_pos()
     } else if (wav->isRunning()) {
       //save position to track_nv
       return track_nv_setFrame(nv.folderIndex, nv.trackIndex, file->getPos());
+    }
+  }
+}
+
+int clear_saved_file_pos()
+{
+  if (track_initialized){
+    if (mp3->isRunning()) {
+      //save position to track_nv
+      return track_nv_setFrame(nv.folderIndex, nv.trackIndex, 0);
+    } else if (wav->isRunning()) {
+      //save position to track_nv
+      return track_nv_setFrame(nv.folderIndex, nv.trackIndex, 0);
     }
   }
 }
