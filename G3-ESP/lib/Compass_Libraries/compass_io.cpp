@@ -208,16 +208,16 @@ bool SX1509::pwm(uint8_t led, uint8_t intensity)
 	Wire.beginTransmission(SX1509_ADDR);
 	switch(led)
 	{
-		case 1:
+		case 4:
 			Wire.write(0x45);
 			break;
-		case 2:
+		case 3:
 			Wire.write(0x40);
 			break;
-		case 3:
+		case 2:
 			Wire.write(0x3B);
 			break;
-		case 4:
+		case 1:
 			Wire.write(0x36);
 			break;
 	}
