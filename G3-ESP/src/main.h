@@ -5,6 +5,7 @@
 #ifndef main_h
 #define main_h
 
+#include <Arduino.h>
 
 #define 	ADC_PIN_USBVCC		0	
 #define 	ADC_PIN_CHRG		1		
@@ -36,6 +37,8 @@ void jingle(int id, float gain);
 
 uint32_t adc_get(int pin);
 void adc_set(int pin);
+void adc_print_all();
+void adc_print_all_raw();
 void handle_wakeup();
 void charging_loop();
 uint8_t vccToPercent(int vcc);

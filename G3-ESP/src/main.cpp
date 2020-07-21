@@ -1083,7 +1083,7 @@ uint32_t adc_get(int pin)
       break;
 
     case ADC_PIN_SOLAR:
-      adc*=7.383; //30k, 4.7k vdiv
+      adc/=(4.7/(33.3333+4.7)); 
       break;
   
   }
@@ -1115,6 +1115,8 @@ void charging_loop()
   io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
   int vcc;
   while(1){
+    //adc_print_all_raw(); //for debugging
+
     //read battery voltage
     adc_set(ADC_PIN_VCC);
     delay(10);
@@ -1240,4 +1242,39 @@ void wakeup_cb() {
   // see: #6 from https://github.com/esp8266/Arduino/issues/1381#issuecomment-279117473
   Serial.printf("wakeup_cb\n");
   Serial.flush();
+}
+
+
+void adc_print_all_raw()
+{
+  const int settle_time = 100;
+  
+  adc_set(ADC_PIN_USBVCC);
+  delay(settle_time);
+  Serial.printf("\nUSB: %imv\t", adc_get(ADC_PIN_USBVCC));
+
+  adc_set(ADC_PIN_CHRG);
+  delay(settle_time);
+  Serial.printf("CHRG: %imv\t", adc_get(ADC_PIN_CHRG));
+
+  adc_set(ADC_PIN_HPDET);
+  delay(settle_time);
+  Serial.printf("HP_DET: %imv\t", adc_get(ADC_PIN_HPDET));
+
+  adc_set(ADC_PIN_VCC);
+  delay(settle_time);
+  Serial.printf("VCC: %imv\t", adc_get(ADC_PIN_VCC));
+
+  adc_set(ADC_PIN_DCHRG);
+  delay(settle_time);
+  Serial.printf("DONE_CHRG: %imv\t", adc_get(ADC_PIN_DCHRG));
+
+  adc_set(ADC_PIN_BRDID);
+  delay(settle_time);
+  Serial.printf("BRD_ID: %imv\t", adc_get(ADC_PIN_BRDID));
+
+  adc_set(ADC_PIN_SOLAR);
+  delay(settle_time);
+  Serial.printf("SOLAR: %imv\t", adc_get(ADC_PIN_SOLAR));
+
 }
