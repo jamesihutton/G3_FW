@@ -34,6 +34,7 @@ RF_MODE(RF_DISABLED);
 #include <twi.h>
 #include <SPI.h>
 #include <SD.h>
+#include "LittleFS.h"
 // You may need a fast SD card. Set this as high as it will work (40MHz max).
 #define SPI_SPEED   SD_SCK_MHZ(40)
 #define SD_CS       17    //a non-existent pin 
@@ -67,7 +68,7 @@ AudioFileSourceID3 *id3;
 
 
 
-static const int fm_addr = B1100011;   //i2c address for si4734
+static const int fm_addr = 0x11;   //i2c address for si4734 (0x63 for SEN = HIGH, 0x11 for SEN = LOW)
 int SDIO = D2;
 int SCLK = D1;
 
@@ -77,7 +78,8 @@ int SCLK = D1;
 
 int channel = 9470;
 #define fm_max 10790
-#define fm_min  6410
+#define fm_min  8790
+//#define fm_min  6410  //can go lower than general fm channels on fm mode...
 char rdsBuffer[10];
 
 #define TRACK_MAX_GAIN    1.5   //
@@ -285,10 +287,22 @@ bool init_radio()
 
   digitalWrite(MUTE_PIN, MUTE);   //mute during init to avoid pops
   
-  //RESET radio
+  //RESET radio (and SD card...)
+  SD.end();
   io.digitalWrite(USB_SD_RAD_RST, LOW);
   delay(10);
   io.digitalWrite(USB_SD_RAD_RST, HIGH);
+
+  int resp = SD.begin(SD_CS, SPI_SPEED); //SD card must now be restarted, since doing this toggled it's power
+  if (!resp) {
+    while(1){
+      Serial.println("\n\nCould not connect to SD card\n\n");
+     io.digitalWrite(LED1, 1);io.digitalWrite(LED2, 1);io.digitalWrite(LED3, 1);io.digitalWrite(LED4, 1);
+     delay(400);
+     io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
+     delay(400);
+    }
+  } 
 
   Wire.begin(SDIO, SCLK);  //SDA, SCL
   delay(200); //remove?
@@ -513,12 +527,12 @@ void setup()
 
   //UPDATE NONVOLS
   //Initialize File System
-  if(SPIFFS.begin())  Serial.println("SPIFFS Initialize....ok");
+  if(LittleFS.begin())  Serial.println("SPIFFS Initialize....ok");
   else                Serial.println("SPIFFS Initialization...failed");
  
   //Format File System
   if(io.digitalRead(SW_Q)){
-    if(SPIFFS.format()) Serial.println("File System Formated");
+    if(LittleFS.format()) Serial.println("File System Formated");
     else                Serial.println("File System Formatting Error");
   }
 
@@ -584,12 +598,12 @@ void device_init()
 
   //UPDATE NONVOLS
   //Initialize File System
-  if(SPIFFS.begin())  Serial.println("SPIFFS Initialize....ok");
+  if(LittleFS.begin())  Serial.println("SPIFFS Initialize....ok");
   else                Serial.println("SPIFFS Initialization...failed");
  
   //Format File System
   if(io.digitalRead(SW_Q)){
-    if(SPIFFS.format()) Serial.println("File System Formated");
+    if(LittleFS.format()) Serial.println("File System Formated");
     else                Serial.println("File System Formatting Error");
   }
 
@@ -818,7 +832,7 @@ void button_tick()
         nv.set_nonVols();
 
         //safely end SPIFFS
-        SPIFFS.end();
+        LittleFS.end();
         
         readSD();
         
@@ -860,7 +874,7 @@ void button_tick()
         } else {
 
           //safely end SPIFFS
-          SPIFFS.end();
+          LittleFS.end();
 
           //power down board
           io.reset();
@@ -1024,6 +1038,7 @@ void adc_set(int pin)
 
   (!!(pin & 0b0001)) ? (SDA_HIGH(SDA)) : (SDA_LOW(SDA));
   (!!(pin & 0b0010)) ? (SCL_HIGH(SCLK)) : (SCL_LOW(SCLK));
+  (!!(pin & 0b0100)) ? (digitalWrite(D0, HIGH)) : (digitalWrite(D0, LOW));
   
   //STILL NEED TO ADD 3RD CONTROL LINE...
 
@@ -1035,7 +1050,7 @@ uint32_t adc_get(int pin)
 {
   uint32_t adc = 0;
 
-  //average 1000 readings
+  //average "ADC_SAMPLE_COUNT" x readings
   for (int i = 0; i<ADC_SAMPLE_COUNT; i++){
     adc += analogRead(A0);
   } 
@@ -1048,22 +1063,31 @@ uint32_t adc_get(int pin)
   switch(pin)
   {
     case ADC_PIN_USBVCC:
-      return(adc*11);    // 0.0909090 vdiv (100k->10k)
+      adc*=11;    // 0.0909090 vdiv (100k->10k)
       break;
     
     case ADC_PIN_CHRG:
-
       break;
     
     case ADC_PIN_HPDET:
-
       break;
     
     case ADC_PIN_VCC:
-      return(adc*4);    // 1/4vdiv
+      adc*=4;    // 1/4vdiv
+      break;
+
+    case ADC_PIN_DCHRG:
+      break;
+
+    case ADC_PIN_BRDID:
+      break;
+
+    case ADC_PIN_SOLAR:
+      adc*=7.383; //30k, 4.7k vdiv
       break;
   
   }
+  return(adc);
 }
 
 
@@ -1087,6 +1111,8 @@ void handle_wakeup()
 //(unless power button is pressed)
 void charging_loop()
 {
+  io.init();
+  io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
   int vcc;
   while(1){
     //read battery voltage
