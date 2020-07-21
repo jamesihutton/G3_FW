@@ -936,18 +936,18 @@ void readSD()
 
 //remember, LEDs are reversed (0 = on)
 void updateLED(){
-  io.digitalWrite(LED1, 1);io.digitalWrite(LED2, 1);io.digitalWrite(LED3, 1);io.digitalWrite(LED4, 1);
+  io.pwm(1, 0); io.pwm(2, 0); io.pwm(3, 0); io.pwm(4, 0); //switched to using PWM, but check power consumption...
   if (nv.deviceVolume>=1) {
-    io.digitalWrite(LED1, 0);
+    io.pwm(1, 255);
   }
   if (nv.deviceVolume>=4) {
-    io.digitalWrite(LED2, 0);
+    io.pwm(2, 255);
   }
   if (nv.deviceVolume>=8) {
-    io.digitalWrite(LED3, 0);
+    io.pwm(3, 255);
   }
   if (nv.deviceVolume>=12) {
-    io.digitalWrite(LED4, 0);
+    io.pwm(4, 255);
   }
 }
 

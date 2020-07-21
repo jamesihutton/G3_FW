@@ -20,10 +20,10 @@
 #define			USB_SD_RAD_RST		1
 #define			SW_MODE				2
 #define			SW_Q				3
-#define			LED4				4
-#define			LED3				5
-#define			LED2				6
-#define			LED1				7
+#define			LED1				4
+#define			LED2				5
+#define			LED3				6
+#define			LED4				7
 
 #define			SW_VDOWN			8
 #define			SW_VUP				9
