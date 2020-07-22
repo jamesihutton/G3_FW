@@ -488,7 +488,23 @@ void setup()
   //what woke the device up?
   handle_wakeup();
 
+  //check voltage:
+  if (!LV_check()) {
+    Serial.println("Battery voltage to low... Powering down");
+    jingle(JINGLE_LOWBATT, DEFAULT_JINGLE_GAIN);
+    //power down board
+    io.reset();
+    io.OSCIO_set(LOW);
+    delay(5000);  //wait for latch circuit to die
 
+    //if still on at this point, USB is keeping on, 
+    //so reset the device and go into charging animation...
+    Serial.println("reseting device...");
+    ESP.restart();
+    
+    //should never reach this
+    while(1){}
+  }
 
   Serial.println("power - up jingle");
   //play power up jingle
@@ -650,6 +666,12 @@ void loop()
   if (!(ms%5)){
       button_tick();
       if(nv.deviceMode == RADIO_MODE)  sleep_tick();
+  }
+
+  if (!(ms%LV_CHECK_INTERVAL)){
+    if (!LV_check()) {
+      LV_handle();  //power down device
+    }
   }
 
 
@@ -915,7 +937,7 @@ void readSD()
   io.digitalWrite(MUX_SEL, HIGH);
   //RESET SD card and SD reader
   io.digitalWrite(USB_SD_RAD_RST, LOW);
-  delay(100);
+  delay(1000);
   io.digitalWrite(USB_SD_RAD_RST, HIGH);
 
   //loop until SW_POW is pressed (should reset ESP though when MUX_SEL goes low and triggers FTDI...)
@@ -992,6 +1014,14 @@ void jingle(int id, float gain)
             delay(300);
             file_progmem = new AudioFileSourcePROGMEM(charging, sizeof(charging));
             break;
+
+        case JINGLE_LOWBATT:
+            delay(300);
+            file_progmem = new AudioFileSourcePROGMEM(lowBatt, sizeof(lowBatt));
+            break;
+
+        default:
+          return;
     }
     out_progmem = new AudioOutputI2S();
     wav_progmem = new AudioGeneratorWAV();
@@ -1030,7 +1060,7 @@ void jingle(int id, float gain)
 #include <core_esp8266_si2c.cpp>
 
 ADC_MODE(ADC_TOUT);
-#define ADC_SAMPLE_COUNT    1000  //read and average this many samples each time
+#define ADC_SAMPLE_COUNT    100  //read and average this many samples each time
 #define ADC_CEILING_MV      1000  //mv that corresponds to 1023 in the adc
 void adc_set(int pin)
 {
@@ -1232,6 +1262,11 @@ void sleep_tick()
 
   // works, but wipes memory
   //ESP.deepSleep(15000000);
+
+  //Check voltage
+  if (!LV_check()) {
+      LV_handle();  //power down device
+  }
 }
 
 void wakeup_cb() {
@@ -1242,6 +1277,7 @@ void wakeup_cb() {
   // see: #6 from https://github.com/esp8266/Arduino/issues/1381#issuecomment-279117473
   Serial.printf("wakeup_cb\n");
   Serial.flush();
+
 }
 
 
@@ -1289,4 +1325,50 @@ void adc_print_all()
   delay(settle_time);
   Serial.printf("SOLAR: %imv\t", adc_get(ADC_PIN_SOLAR));
 
+}
+
+bool LV_check()
+{
+  adc_set(ADC_PIN_VCC);
+  delay(10);
+  if (adc_get(ADC_PIN_VCC) < LV_THRESH) return 0;
+  else return 1;
+}
+
+void LV_handle()
+{
+  //power down radio
+  powerdown_radio();
+  delay(100);
+
+  jingle(JINGLE_LOWBATT, 1.0);       //takes ~2 seconds
+  delay(500);
+  Serial.println("BATTERY TO LOW, POWERING DOWN...");
+    
+  //update track frame last second...
+  if (nv.deviceMode == TRACK_MODE) nv.trackFrame = file->getPos();
+
+  //set all the params in nonVol memory 
+  nv.set_nonVols();
+  
+  //SD.end();
+
+  //play power down jingle
+  jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
+
+  //safely end SPIFFS
+  LittleFS.end();
+
+  //power down board
+  io.reset();
+  io.OSCIO_set(LOW);
+  delay(5000);  //wait for latch circuit to die
+
+  //if still on at this point, USB is keeping on, 
+  //so reset the device and go into charging animation...
+  Serial.println("reseting device...");
+  ESP.restart();
+  
+  //should never reach this
+  while(1){}
 }

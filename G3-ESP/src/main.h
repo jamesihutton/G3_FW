@@ -19,6 +19,21 @@
 
 
 
+//CONSTANTS:
+#define 		LV_THRESH				2700	//under 2700mv, the device will power down
+#define			LV_CHECK_INTERVAL		10000	//check for low voltage every 10 seconds
+
+
+
+
+
+
+
+
+
+
+
+
 bool latchPower();
 void button_tick();
 
@@ -44,4 +59,8 @@ uint8_t vccToPercent(int vcc);
 
 void sleep_tick();
 void wakeup_cb();
+
+bool LV_check();
+void LV_handle();
+void adc_settle();
 #endif
