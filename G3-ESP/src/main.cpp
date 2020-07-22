@@ -1030,8 +1030,8 @@ void jingle(int id, float gain)
 #include <core_esp8266_si2c.cpp>
 
 ADC_MODE(ADC_TOUT);
-#define ADC_SAMPLE_COUNT    100  //read and average this many samples each time
-#define ADC_CEILING_MV      972  //mv that corresponds to 1023 in the adc
+#define ADC_SAMPLE_COUNT    1000  //read and average this many samples each time
+#define ADC_CEILING_MV      1000  //mv that corresponds to 1023 in the adc
 void adc_set(int pin)
 {
     
@@ -1048,16 +1048,16 @@ void adc_set(int pin)
 //returns mapped value in mv depending on pin being read
 uint32_t adc_get(int pin)
 {
-  uint32_t adc = 0;
+  float adc = 0;
 
   //average "ADC_SAMPLE_COUNT" x readings
   for (int i = 0; i<ADC_SAMPLE_COUNT; i++){
     adc += analogRead(A0);
   } 
-  adc /= ADC_SAMPLE_COUNT;
+  adc /= (ADC_SAMPLE_COUNT/1.0);
 
   //convert to mv
-  adc = map(adc, 0, 1023, 0, ADC_CEILING_MV); 
+  adc = mapf(adc, 0, 1023, 0, ADC_CEILING_MV); 
 
   //correct for vdivs for whatever pin being read
   switch(pin)
@@ -1083,7 +1083,7 @@ uint32_t adc_get(int pin)
       break;
 
     case ADC_PIN_SOLAR:
-      adc/=(4.7/(33.3333+4.7)); 
+      adc/=(1.0/(1.0+4.7)); 
       break;
   
   }
@@ -1115,7 +1115,7 @@ void charging_loop()
   io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
   int vcc;
   while(1){
-    //adc_print_all_raw(); //for debugging
+    adc_print_all(); //for debugging
 
     //read battery voltage
     adc_set(ADC_PIN_VCC);
@@ -1245,9 +1245,12 @@ void wakeup_cb() {
 }
 
 
-void adc_print_all_raw()
+void adc_print_all()
 {
-  const int settle_time = 100;
+  const int settle_time = 10;
+  const int high_thresh = 900;
+  const int low_thresh = 100;
+  int x;
   
   adc_set(ADC_PIN_USBVCC);
   delay(settle_time);
@@ -1255,11 +1258,17 @@ void adc_print_all_raw()
 
   adc_set(ADC_PIN_CHRG);
   delay(settle_time);
-  Serial.printf("CHRG: %imv\t", adc_get(ADC_PIN_CHRG));
+  x = adc_get(ADC_PIN_CHRG);
+  if (x < low_thresh) Serial.printf("CHRG: 1\t\t");
+  else if (x > high_thresh) Serial.printf("CHRG: 0\t\t");
+  else Serial.printf("CHRG: error\t");
 
   adc_set(ADC_PIN_HPDET);
   delay(settle_time);
-  Serial.printf("HP_DET: %imv\t", adc_get(ADC_PIN_HPDET));
+  x = adc_get(ADC_PIN_HPDET);
+  if (x < low_thresh) Serial.printf("HP_DET: 0\t");
+  else if (x > high_thresh) Serial.printf("HP_DET: 1\t");
+  else Serial.printf("HP_DET: error\t");
 
   adc_set(ADC_PIN_VCC);
   delay(settle_time);
@@ -1267,7 +1276,10 @@ void adc_print_all_raw()
 
   adc_set(ADC_PIN_DCHRG);
   delay(settle_time);
-  Serial.printf("DONE_CHRG: %imv\t", adc_get(ADC_PIN_DCHRG));
+  x = adc_get(ADC_PIN_DCHRG);
+  if (x < low_thresh) Serial.printf("DONE_CHRG: 1\t");
+  else if (x > high_thresh) Serial.printf("DONE_CHRG: 0\t");
+  else Serial.printf("DONE_CHRG: error\t");
 
   adc_set(ADC_PIN_BRDID);
   delay(settle_time);
