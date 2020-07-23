@@ -650,6 +650,8 @@ void device_init()
 int mute = 0;
 int ms = 0;
 int last_ms = 0;
+int next_LV_check = LV_CHECK_INTERVAL;
+int next_LV_warn = LV_WARN_INTERVAL;
 void loop()
 {while(1){
   //feed WDT
@@ -665,13 +667,43 @@ void loop()
 
   if (!(ms%5)){
       button_tick();
-      if(nv.deviceMode == RADIO_MODE)  sleep_tick();
+      if(nv.deviceMode == RADIO_MODE)  radio_sleep_tick();
   }
 
-  if (!(ms%LV_CHECK_INTERVAL)){
-    if (!LV_check()) {
-      LV_handle();  //power down device
+  if ((ms >= next_LV_check) && (nv.deviceMode == TRACK_MODE)){
+    adc_set(ADC_PIN_VCC);
+    delay(10);
+    int mv = adc_get(ADC_PIN_VCC);
+    if (mv < LV_THRESH) {
+      LV_handle();
     }
+    else if (mv < LV_WARN_THRESH) {
+      if(ms >= next_LV_warn){
+        //make sure not charging
+        adc_set(ADC_PIN_USBVCC);
+        delay(10);
+        if (adc_get(ADC_PIN_USBVCC) < 200) {
+          //stop current track
+          int resume_playing = track_play;
+          nv.trackFrame = file->getPos();
+          if (mp3->isRunning()) {
+            mp3->stop();
+          } else if (wav->isRunning()) {
+            wav->stop();
+          }
+          track_initialized = 0;
+          //play jingle
+          delay(300);
+          jingle(JINGLE_LOWBATT, 0.75);
+          delay(300);
+          //resume track
+          init_track();
+          track_play = resume_playing;
+          next_LV_warn = ms + LV_WARN_INTERVAL;
+        }
+      }        
+    }
+    next_LV_check = ms + LV_CHECK_INTERVAL;
   }
 
 
@@ -1015,9 +1047,8 @@ void jingle(int id, float gain)
             file_progmem = new AudioFileSourcePROGMEM(charging, sizeof(charging));
             break;
 
-        case JINGLE_LOWBATT:
-            delay(300);
-            file_progmem = new AudioFileSourcePROGMEM(lowBatt, sizeof(lowBatt));
+        case JINGLE_LOWBATT:         
+            file_progmem = new AudioFileSourcePROGMEM(lowBatt, sizeof(lowBatt));          
             break;
 
         default:
@@ -1221,7 +1252,7 @@ uint8_t vccToPercent(int vcc)
 
 
 //in certain modes (whenever not playing a track) device should go into light sleep periodically
-void sleep_tick()
+void radio_sleep_tick()
 {
   
     Serial.printf("\nsleeping\n");
@@ -1253,8 +1284,8 @@ void sleep_tick()
   wifi_fpm_open();
   wifi_fpm_set_wakeup_cb(wakeup_cb);
   //wifi_fpm_do_sleep(0xFFFFFF);  // works but requires interupt to wake up
-  wifi_fpm_do_sleep(120000 * 1000);
-  delay (120001);
+  wifi_fpm_do_sleep(RADIO_SLEEP_INTERVAL * 1000);
+  delay (RADIO_SLEEP_INTERVAL + 1);
   
   // ~7ma for 15 seconds, then ~22ma for 15 seconds (75ma for 5 seconds without forcesleepbegin in callback)
   // because ticks slow dramatically during sleep, and delay uses ticks to know when its finished
@@ -1264,8 +1295,34 @@ void sleep_tick()
   //ESP.deepSleep(15000000);
 
   //Check voltage
-  if (!LV_check()) {
-      LV_handle();  //power down device
+  if(digitalRead(D3)){    //if wokeup from sleep timer (not a button press)
+    adc_set(ADC_PIN_VCC);
+    delay(10);
+    int mv = adc_get(ADC_PIN_VCC);
+    if (mv < LV_THRESH) {
+      LV_handle();
+    }
+    else if (mv < LV_WARN_THRESH) {
+      //make sure not charging
+      adc_set(ADC_PIN_USBVCC);
+      delay(10);
+      if (adc_get(ADC_PIN_USBVCC) < 200) {
+        //Mute Radio
+        digitalWrite(MUTE_PIN, MUTE);
+        delay(400);
+        powerdown_radio();
+
+        //play jingle
+        jingle(JINGLE_LOWBATT, 0.75);
+
+        //resume radio
+        bool resume_play = radio_play;
+        init_radio();
+        radio_play = resume_play;
+        if(!radio_play) set_rad_vol(-1);
+        digitalWrite(MUTE_PIN, UNMUTE);
+      }
+    }
   }
 }
 
