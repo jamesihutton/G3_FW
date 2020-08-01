@@ -348,6 +348,44 @@ bool init_radio()
 
 }
 
+int rad_seek(bool dir)
+{
+  //seek
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x21);  
+  if (dir)  Wire.write(B00001100); //seek up
+  else      Wire.write(B00000100); //seek down
+  Wire.endTransmission();
+  delay(100);
+
+  int resp[8];
+  int timeout = 0;
+  while(1){
+    Wire.beginTransmission(fm_addr);
+    Wire.write(0x22); //get fm tune status
+    Wire.write(0x01);
+    Wire.endTransmission();
+    Wire.requestFrom(fm_addr, (byte) 7);
+    for (int i = 0; i<8; i++) {
+      resp[i] = Wire.read();
+    }
+    
+    //once valid station is found
+    if (resp[1] > 0) {
+      int freq = (resp[2] <<  8) | resp[3];    
+      nv.radioChannel = freq;
+      Serial.printf("\nRadio seeked to: %i", freq);
+      Serial.printf("\nRSSI: \t\t%i dB", resp[4]);
+      Serial.printf("\nSNR: \t\t%i dB", resp[5]);
+      return freq;
+    }
+    delay(100);
+    timeout += 100;
+    if (timeout > 5000) return 0; //timeout after 5 seconds
+  }
+
+}
+
 int set_rad_vol(int vol)
 {
   int vhex;
@@ -508,7 +546,7 @@ void setup()
 
   Serial.println("power - up jingle");
   //play power up jingle
-  jingle(JINGLE_POWER_UP, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
+  jingle(JINGLE_POWER_UP, DEFAULT_JINGLE_GAIN - 0.25);       //takes ~2 seconds
 
 
 
@@ -693,9 +731,7 @@ void loop()
           }
           track_initialized = 0;
           //play jingle
-          delay(300);
-          jingle(JINGLE_LOWBATT, 0.75);
-          delay(300);
+          jingle(JINGLE_LOWBATT, 1);
           //resume track
           init_track();
           track_play = resume_playing;
@@ -796,10 +832,7 @@ void button_tick()
           nv.trackFrame = 0;
           init_track();
         } else if (nv.deviceMode == RADIO_MODE) {
-          nv.radioChannel += 20;
-          if (nv.radioChannel > fm_max+1) nv.radioChannel = fm_min;
-          set_rad_chan(nv.radioChannel);
-          displayInfo();
+          rad_seek(1);
         }
 
       }
@@ -810,10 +843,7 @@ void button_tick()
           nv.trackFrame = 0;
           init_track();
         } else if (nv.deviceMode == RADIO_MODE) {
-          nv.radioChannel -= 20;
-          if (nv.radioChannel < fm_min-1) nv.radioChannel = fm_max;
-          set_rad_chan(nv.radioChannel);
-          displayInfo();
+          rad_seek(0);
         }
 
       }
@@ -829,9 +859,10 @@ void button_tick()
           nv.trackFrame = 0;
           init_track();
         } else if (nv.deviceMode == RADIO_MODE) {
-          
+          nv.radioChannel += 10;
+          if (nv.radioChannel > fm_max+1) nv.radioChannel = fm_min;
+          set_rad_chan(nv.radioChannel);
           displayInfo();
-          updateLED();
         }
 
       }
@@ -847,9 +878,10 @@ void button_tick()
           nv.trackFrame = 0;
           init_track();
         } else if (nv.deviceMode == RADIO_MODE) {
-          
+          nv.radioChannel -= 10;
+          if (nv.radioChannel < fm_min-1) nv.radioChannel = fm_max;
+          set_rad_chan(nv.radioChannel);
           displayInfo();
-          updateLED();
         }
       }
       if(io.digitalRead(SW_MODE)){
@@ -908,7 +940,7 @@ void button_tick()
         //SD.end();
 
         //play power down jingle
-        jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
+        jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN - 0.25);       //takes ~2 seconds
 
         //Check if USB is plugged in
         adc_set(ADC_PIN_USBVCC);
@@ -1047,8 +1079,10 @@ void jingle(int id, float gain)
             file_progmem = new AudioFileSourcePROGMEM(charging, sizeof(charging));
             break;
 
-        case JINGLE_LOWBATT:         
+        case JINGLE_LOWBATT:  
+            delay(300);       
             file_progmem = new AudioFileSourcePROGMEM(lowBatt, sizeof(lowBatt));          
+            delay(300);
             break;
 
         default:
@@ -1240,10 +1274,10 @@ void charging_loop()
 uint8_t vccToPercent(int vcc)
 {
   if (vcc > 3620) return 100;
-  else if (vcc > 3400) return 90;
-  else if (vcc > 3320) return 75;
-  else if (vcc > 3290) return 50;
-  else if (vcc > 3240) return 25;
+  else if (vcc > 3500) return 90;
+  else if (vcc > 3400) return 75;
+  else if (vcc > 3300) return 50;
+  else if (vcc > 3200) return 25;
   else if (vcc > 3185) return 10;
   else if (vcc > 3050) return 5;
   else if (vcc > 2700) return 1;
@@ -1256,6 +1290,10 @@ void radio_sleep_tick()
 {
   
     Serial.printf("\nsleeping\n");
+
+    //set pinmodes accordingly
+
+
   
 
   // For some reason, moving timer_list pointer to the end of the list lets us achieve light sleep
@@ -1313,7 +1351,7 @@ void radio_sleep_tick()
         powerdown_radio();
 
         //play jingle
-        jingle(JINGLE_LOWBATT, 0.75);
+        jingle(JINGLE_LOWBATT, 1);
 
         //resume radio
         bool resume_play = radio_play;
@@ -1411,7 +1449,7 @@ void LV_handle()
   //SD.end();
 
   //play power down jingle
-  jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
+  jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN - 0.25);       //takes ~2 seconds
 
   //safely end SPIFFS
   LittleFS.end();

@@ -22,7 +22,7 @@
 //CONSTANTS:
 #define 		LV_THRESH				2700	//under 2700mv, the device will power down
 #define			LV_CHECK_INTERVAL		10000	//check for low voltage every 10 seconds
-#define			LV_WARN_THRESH			2800	//Should have ~10 mins runtime left at this threshold...
+#define			LV_WARN_THRESH			3000	//Should have ~10 mins runtime left at this threshold...
 #define			LV_WARN_INTERVAL		120000	//LV warning beep every 2 mins	(ensure this is a multiple of the check interval!)
 
 #define			RADIO_SLEEP_INTERVAL	120000	//2 miniute sleep interval for radio	
@@ -38,7 +38,7 @@ bool latchPower();
 void button_tick();
 
 bool init_radio();
-
+int rad_seek(bool dir);
 void track_tick();
 int set_rad_chan(int chan); 
 int set_rad_vol(int vol);
