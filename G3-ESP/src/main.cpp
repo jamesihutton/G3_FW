@@ -305,7 +305,6 @@ bool init_radio()
   } 
 
   Wire.begin(SDIO, SCLK);  //SDA, SCL
-  delay(200); //remove?
 
   //POINT TO ADDRESS TO READ FROM
   Wire.beginTransmission(fm_addr);
@@ -313,7 +312,6 @@ bool init_radio()
   Wire.write(B00010000);  //0x10 //external crystal
   Wire.write(0x05);  //0x05
   if(Wire.endTransmission()) return 0;  //NACK... failed to connect
-  delay(200);
 
   
   Wire.beginTransmission(fm_addr);
@@ -324,7 +322,6 @@ bool init_radio()
   Wire.write(0x00);  //0x00
   Wire.write(0x00);  //0x03   //3dB
   Wire.endTransmission();
-  delay(200);
 
   Wire.beginTransmission(fm_addr);
   Wire.write(0x12);  //0x12
@@ -334,7 +331,31 @@ bool init_radio()
   Wire.write(0x00);  //0x00
   Wire.write(0x00);  //0x00
   Wire.endTransmission();
+
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x14);  
+  Wire.write(0x03);  
+  Wire.write(0x00);  
+  Wire.write(0x01);  //set seek SNR thresh in dB (default was 3 dB)
+  Wire.endTransmission();
+
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x14);  
+  Wire.write(0x04);  
+  Wire.write(0x00);  
+  Wire.write(0x01);  //set seek RSSI thresh in dBuV (default was 20 dBuV)
+  Wire.endTransmission();
+ 
+
+  /*
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x14);  
+  Wire.write(0x02);  
+  Wire.write(0x00);  
+  Wire.write(0x14);  //set seek spacing to 200kHz (default was 100kHz)
+  Wire.endTransmission();
   delay(200);
+  */
 
   set_rad_vol(nv.deviceVolume);
   set_rad_chan(nv.radioChannel);
@@ -372,6 +393,16 @@ int rad_seek(bool dir)
     
     //once valid station is found
     if (resp[1] > 0) {
+      delay(1000); //settle channel
+      //poll one last time
+      Wire.beginTransmission(fm_addr);
+      Wire.write(0x22); //get fm tune status
+      Wire.write(0x01);
+      Wire.endTransmission();
+      Wire.requestFrom(fm_addr, (byte) 7);
+      for (int i = 0; i<8; i++) {
+        resp[i] = Wire.read();
+      }
       int freq = (resp[2] <<  8) | resp[3];    
       nv.radioChannel = freq;
       Serial.printf("\nRadio seeked to: %i", freq);
@@ -384,6 +415,24 @@ int rad_seek(bool dir)
     if (timeout > 5000) return 0; //timeout after 5 seconds
   }
 
+}
+
+void print_rad_info()
+{
+  int resp[8];
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x22); //get fm tune status
+  Wire.write(0x01);
+  Wire.endTransmission();
+  Wire.requestFrom(fm_addr, (byte) 7);
+  for (int i = 0; i<8; i++) {
+    resp[i] = Wire.read();
+  }
+  int freq = (resp[2] <<  8) | resp[3];    
+  nv.radioChannel = freq;
+  Serial.printf("\nChannel: %i", freq);
+  Serial.printf("\nRSSI: \t\t%i dB", resp[4]);
+  Serial.printf("\nSNR: \t\t%i dB", resp[5]);
 }
 
 int set_rad_vol(int vol)
@@ -457,10 +506,12 @@ void switch_mode_radio()
 
 void switch_mode_track()
 {
-  digitalWrite(MUTE_PIN, MUTE);
+  //avoid "click" on radio power down
+  digitalWrite(MUTE_PIN, MUTE); 
+  delay(150);  
   powerdown_radio();
+
   SD.begin(SD_CS, SPI_SPEED); 
-  delay(100);
   nv.deviceMode = TRACK_MODE;
   radio_play = false;
   track_play = true;
@@ -862,7 +913,7 @@ void button_tick()
           nv.radioChannel += 10;
           if (nv.radioChannel > fm_max+1) nv.radioChannel = fm_min;
           set_rad_chan(nv.radioChannel);
-          displayInfo();
+          print_rad_info();
         }
 
       }
@@ -881,7 +932,7 @@ void button_tick()
           nv.radioChannel -= 10;
           if (nv.radioChannel < fm_min-1) nv.radioChannel = fm_max;
           set_rad_chan(nv.radioChannel);
-          displayInfo();
+          print_rad_info();
         }
       }
       if(io.digitalRead(SW_MODE)){
@@ -898,6 +949,7 @@ void button_tick()
             if (track_play) track_play = false;
             else track_play = true;
         }else if (nv.deviceMode == RADIO_MODE) {
+          print_rad_info();
           if (radio_play){
             set_rad_vol(-1);
             radio_play = false;

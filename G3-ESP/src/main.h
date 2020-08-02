@@ -42,6 +42,7 @@ int rad_seek(bool dir);
 void track_tick();
 int set_rad_chan(int chan); 
 int set_rad_vol(int vol);
+void print_rad_info();
 int powerdown_radio();
 void displayInfo();
 void updateLED();
