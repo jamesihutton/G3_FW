@@ -1061,6 +1061,10 @@ void button_tick()
         //set all the params in nonVol memory 
         nv.set_nonVols();
 
+
+        //avoid "click" on radio power down
+        digitalWrite(MUTE_PIN, MUTE); 
+        delay(150);  
         //power down radio
         powerdown_radio();
         
@@ -1150,7 +1154,7 @@ void readSD()
 //remember, LEDs are reversed (0 = on)
 void updateLED(){
   io.pwm(1, 0); io.pwm(2, 0); io.pwm(3, 0); io.pwm(4, 0); //switched to using PWM, but check power consumption...
-  if (nv.deviceVolume>=1) {
+  if (nv.deviceVolume>=0) {
     io.pwm(1, 255);
   }
   if (nv.deviceVolume>=4) {
@@ -1442,6 +1446,7 @@ uint8_t vccToPercent(int vcc)
 
 
 //in certain modes (whenever not playing a track) device should go into light sleep periodically
+bool LED_power_save = false;
 void radio_sleep_tick()
 {
   
@@ -1517,6 +1522,23 @@ void radio_sleep_tick()
         digitalWrite(MUTE_PIN, UNMUTE);
       }
     }
+
+    //fade out LEDs to save power 
+    if (!LED_power_save){
+      Serial.println("fade leds");
+      io.pwm(1, 0); io.pwm(2, 0); io.pwm(3, 0); io.pwm(4, 0); 
+      for (int i = 254; i>=0; i--){ 
+        if (nv.deviceVolume>=0)   io.pwm(1, i);
+        if (nv.deviceVolume>=4)   io.pwm(2, i);
+        if (nv.deviceVolume>=8)   io.pwm(3, i);
+        if (nv.deviceVolume>=12)  io.pwm(4, i);
+        delay(1);   
+      }
+      LED_power_save = true;
+    }
+  } else { //if button press woke up the device
+    updateLED();
+    LED_power_save = false;
   }
 }
 
