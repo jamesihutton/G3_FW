@@ -332,20 +332,91 @@ bool init_radio()
   Wire.write(0x00);  //0x00
   Wire.endTransmission();
 
+
   Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  
+  Wire.write(0x00);  
+  Wire.write(0x11);  
+  Wire.write(0x08);  
+  Wire.write(0x00);
+  Wire.write(0x14);  //tune_error to 20kHz (best seek performance)
+  Wire.endTransmission();
+  delay(100);
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  
+  Wire.write(0x00);  
   Wire.write(0x14);  
   Wire.write(0x03);  
   Wire.write(0x00);  
-  Wire.write(0x01);  //set seek SNR thresh in dB (default was 3 dB)
+  Wire.write(0x03);  //set seek SNR thresh in dB (default was 3 dB)
   Wire.endTransmission();
-
+  delay(100);
   Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  
+  Wire.write(0x00);  
   Wire.write(0x14);  
   Wire.write(0x04);  
   Wire.write(0x00);  
-  Wire.write(0x01);  //set seek RSSI thresh in dBuV (default was 20 dBuV)
+  Wire.write(0x15);  //set seek RSSI thresh in dBuV (default was 20 dBuV)
   Wire.endTransmission();
- 
+  delay(100);
+
+  ///////////////////////////////////
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  
+  Wire.write(0x00);  
+  Wire.write(0x12);  
+  Wire.write(0x00);  
+  Wire.write(0x00);
+  Wire.write(0x8F);  //FM_RSQ_INT_SOURCE
+  Wire.endTransmission();
+  delay(100);
+
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  
+  Wire.write(0x00);  
+  Wire.write(0x12);  
+  Wire.write(0x01);  
+  Wire.write(0x00);
+  Wire.write(0x1E);  //FM_RSQ_SNR_HI_THRESHOLD
+  delay(100);
+
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  
+  Wire.write(0x00);  
+  Wire.write(0x12);  
+  Wire.write(0x02);  
+  Wire.write(0x00);
+  Wire.write(0x06);  //FM_RSQ_SNR_LO_THRESHOLD
+  delay(100);
+
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  
+  Wire.write(0x00);  
+  Wire.write(0x12);  
+  Wire.write(0x03);  
+  Wire.write(0x00);
+  Wire.write(0x32);  //FM_RSQ_RSSI_HI_THRESHOLD
+  delay(100);
+
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  
+  Wire.write(0x00);  
+  Wire.write(0x12);  
+  Wire.write(0x04);  
+  Wire.write(0x00);
+  Wire.write(0x18);  //FM_RSQ_RSSI_LO_THRESHOLD
+  delay(100);
+
+  Wire.beginTransmission(fm_addr);
+  Wire.write(0x12);  
+  Wire.write(0x00);  
+  Wire.write(0x14);  
+  Wire.write(0x00);  
+  Wire.write(0x22);
+  Wire.write(0x56);  //FM_SEEK_BAND_BOTTOM (8790)
+  delay(100);
+  ///////////////////////////////////
 
   /*
   Wire.beginTransmission(fm_addr);
@@ -557,6 +628,8 @@ void setup()
   
   // Set pinModes
   io.init();
+  for(int i = 1; i<= 4; i++) io.pwm(i, 0);
+  io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
   pinMode(D3, INPUT); //!IO_INT pin as input
 
   pinMode(MUTE_PIN, OUTPUT);
@@ -597,7 +670,7 @@ void setup()
 
   Serial.println("power - up jingle");
   //play power up jingle
-  jingle(JINGLE_POWER_UP, DEFAULT_JINGLE_GAIN - 0.25);       //takes ~2 seconds
+  jingle(JINGLE_POWER_UP, 0.25);       //takes ~2 seconds
 
 
 
@@ -883,6 +956,7 @@ void button_tick()
           nv.trackFrame = 0;
           init_track();
         } else if (nv.deviceMode == RADIO_MODE) {
+          //delay(1000);  //wait for i2c line to settle 
           rad_seek(1);
         }
 
@@ -894,6 +968,7 @@ void button_tick()
           nv.trackFrame = 0;
           init_track();
         } else if (nv.deviceMode == RADIO_MODE) {
+          //delay(1000);  //wait for i2c line to settle 
           rad_seek(0);
         }
 
@@ -1147,6 +1222,10 @@ void jingle(int id, float gain)
 
     //mute for a few ms to avoid pop
     int start_time = millis();
+    int anim_last_time = 0;
+    #define anim_interval 1
+    int anim[5] = {0,0,0,0,0};
+    int mapped_ceiling = 200;
     while(1){
         if (wav_progmem->isRunning()){
             if (millis() >= (start_time + MUTE_MS)){
@@ -1159,6 +1238,31 @@ void jingle(int id, float gain)
             }
           ESP.wdtFeed();
         }
+
+        //LED animations
+        if ((id == JINGLE_POWER_UP) && (millis() >= (anim_last_time + anim_interval))) {
+          anim_last_time = millis();
+          if (anim[0] < 40) anim[0]++; //this one is just for initial delay
+          else if (anim[1] < 185) anim[1]++;
+          else if (anim[2] < 185) anim[2]++;
+          else if (anim[3] < 185) anim[3]++;
+          else if (anim[4] < 185) anim[4]++;
+
+          for (int i = 1; i<=4; i++) io.pwm(i, map(anim[i], 0, 185, 0, 254));
+        }
+
+        if ((id == JINGLE_POWER_DOWN) && (millis() >= (anim_last_time + anim_interval))) {
+          anim_last_time = millis();
+          if (anim[0] < 150) anim[0]++; //this one is just for initial delay
+          else if (anim[4] < 185) anim[4]++;
+          else if (anim[3] < 185) anim[3]++;
+          else if (anim[2] < 185) anim[2]++;
+          else if (anim[1] < 185) anim[1]++;
+
+          for (int i = 4; i>0; i--) io.pwm(i, map(185-anim[i], 0, 185, 0, 254));
+        }
+
+        
 
     }
 
@@ -1289,7 +1393,7 @@ void charging_loop()
         io.update_pinData();    
         if(io.digitalRead(SW_POW)) {
           latchPower();
-          for (i = 1; i<=4; i++) {io.pwm(i, 255);}  //enable all LEDs
+          for (i = 1; i<=4; i++) {io.pwm(i, 0);}  //enable all LEDs
           return;
         }
           
