@@ -23,13 +23,13 @@
 #define 		LV_THRESH				2700	//under 2700mv, the device will power down
 #define			LV_CHECK_INTERVAL		10000	//check for low voltage every 10 seconds
 #define			LV_WARN_THRESH			3000	//Should have ~10 mins runtime left at this threshold...
-#define			LV_WARN_INTERVAL		120000	//LV warning beep every 2 mins	(ensure this is a multiple of the check interval!)
+#define			LV_WARN_INTERVAL		60000	//LV warning beep every 2 mins	(ensure this is a multiple of the check interval!)
 
-#define			RADIO_SLEEP_INTERVAL	120000	//2 miniute sleep interval for radio	
+#define			RADIO_SLEEP_INTERVAL	60000	//1 miniute sleep interval for radio	
 
+#define 		LED_FADEOUT_TIME		60000	//to save power. Only affects track mode (for radio, this will just = sleep interval)	
 
-
-
+#define			PAUSED_POWER_DOWN_TIMER	20000	//turn off after this much time when paused
 
 
 
@@ -64,4 +64,10 @@ void wakeup_cb();
 bool LV_check();
 void LV_handle();
 void adc_settle();
+float track_gain_convert();
+int radio_gain_convert();
+void pause_powerdown_check();
+void quiet_power_down();
+
+
 #endif

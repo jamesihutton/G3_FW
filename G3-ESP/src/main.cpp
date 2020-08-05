@@ -86,9 +86,10 @@ char rdsBuffer[10];
 #define TRACK_MIN_GAIN    0.01   //
 
 #define RADIO_MAX_GAIN    63    
-#define RADIO_MIN_GAIN    30
+#define RADIO_MIN_GAIN    25
 
 #define MAX_DEVICE_VOL    15    //used for both Radio and MP3 nv.deviceVolume!
+#define MIN_DEVICE_VOL    1
 float track_gain = 0.3;     //starting level
 
 
@@ -108,7 +109,7 @@ bool track_initialized = 0; //only happens first time
 bool track_play = false;
 bool radio_play = false;
 
-
+bool LED_power_save = false;  //flag if LEDs have faded to save power
 
 #define TRACK_MODE 0
 #define RADIO_MODE 1
@@ -261,7 +262,7 @@ void init_track()
   track_initialized = true; //raised forever after first init
 
 
-  track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, TRACK_MIN_GAIN, TRACK_MAX_GAIN);
+  track_gain = track_gain_convert();
   out->SetGain(track_gain);
   Serial.print("\ngain = ");
   Serial.println(track_gain);
@@ -510,7 +511,7 @@ int set_rad_vol(int vol)
 {
   int vhex;
   if (vol < 0) vhex = 0;
-  else vhex = map(vol,0,MAX_DEVICE_VOL,RADIO_MIN_GAIN,RADIO_MAX_GAIN); 
+  else vhex = radio_gain_convert(); 
   Wire.beginTransmission(fm_addr);
   Wire.write(0x12);  
   Wire.write(0x00);  
@@ -670,7 +671,7 @@ void setup()
 
   Serial.println("power - up jingle");
   //play power up jingle
-  jingle(JINGLE_POWER_UP, 0.25);       //takes ~2 seconds
+  jingle(JINGLE_POWER_UP, 0.10);       //takes ~2 seconds
 
 
 
@@ -742,7 +743,7 @@ void device_init()
 {
   Serial.println("power - up jingle");
   //play power up jingle
-  jingle(JINGLE_POWER_UP, DEFAULT_JINGLE_GAIN);       //takes ~2 seconds
+  jingle(JINGLE_POWER_UP, 0.1);       //takes ~2 seconds
 
 
 
@@ -814,6 +815,9 @@ int ms = 0;
 int last_ms = 0;
 int next_LV_check = LV_CHECK_INTERVAL;
 int next_LV_warn = LV_WARN_INTERVAL;
+uint32_t pause_time = -1;
+uint32_t rad_pause_power_down_time = -1;
+uint32_t rad_pause_timer = 0;
 void loop()
 {while(1){
   //feed WDT
@@ -830,6 +834,9 @@ void loop()
   if (!(ms%5)){
       button_tick();
       if(nv.deviceMode == RADIO_MODE)  radio_sleep_tick();
+
+      //pause checker
+      pause_powerdown_check();
   }
 
   if ((ms >= next_LV_check) && (nv.deviceMode == TRACK_MODE)){
@@ -895,10 +902,14 @@ void track_tick()
   }
 }
 
-
+int LED_fade_timer = LED_FADEOUT_TIME;
 void button_tick()
 {
   if(!digitalRead(D3)){ //if !IO_INT is triggered... read buttons
+      //bring back LEDs if they faded out
+      updateLED();
+      LED_power_save = false;
+      LED_fade_timer = millis() + LED_FADEOUT_TIME;
 
       Serial.println("button pressed");
       io.update_pinData();    //this must be called before reading any pins! (reads them all at once in one command...)
@@ -906,7 +917,7 @@ void button_tick()
         if (nv.deviceMode == TRACK_MODE) {
           nv.deviceVolume ++;
           if (nv.deviceVolume > MAX_DEVICE_VOL) nv.deviceVolume = MAX_DEVICE_VOL;
-          track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, 0, TRACK_MAX_GAIN);
+          track_gain = track_gain_convert();
           /*
           nv.trackFrame = file->getPos();
           jingle(JINGLE_TICK, track_gain); //play the tick sound  
@@ -917,7 +928,7 @@ void button_tick()
           updateLED();
         } else if (nv.deviceMode == RADIO_MODE) {
           nv.deviceVolume ++;
-          if (nv.deviceVolume == 16) nv.deviceVolume = 15;
+          if (nv.deviceVolume > MAX_DEVICE_VOL) nv.deviceVolume = MAX_DEVICE_VOL;
 
           set_rad_vol(nv.deviceVolume);
           displayInfo();
@@ -929,8 +940,8 @@ void button_tick()
       if(io.digitalRead(SW_VDOWN)){
         if (nv.deviceMode == TRACK_MODE) {
           nv.deviceVolume --;
-          if (nv.deviceVolume < 0) nv.deviceVolume = 0;
-          track_gain = mapf(nv.deviceVolume, 0, MAX_DEVICE_VOL, 0, TRACK_MAX_GAIN);
+          if (nv.deviceVolume < MIN_DEVICE_VOL) nv.deviceVolume = MIN_DEVICE_VOL;
+          track_gain = track_gain_convert();
           /*
           nv.trackFrame = file->getPos();
           jingle(JINGLE_TICK, track_gain); //play the tick sound
@@ -942,7 +953,7 @@ void button_tick()
           updateLED();
         } else if (nv.deviceMode == RADIO_MODE) {
           nv.deviceVolume --;
-          if (nv.deviceVolume < 0) nv.deviceVolume = 0;
+          if (nv.deviceVolume < MIN_DEVICE_VOL) nv.deviceVolume = MIN_DEVICE_VOL;
           set_rad_vol(nv.deviceVolume);
           displayInfo();
           updateLED();
@@ -1021,10 +1032,16 @@ void button_tick()
 
       if(io.digitalRead(SW_PLAY)){
         if (nv.deviceMode == TRACK_MODE) {
-            if (track_play) track_play = false;
-            else track_play = true;
+            if (track_play) {
+              track_play = false;    
+              pause_time = millis();     
+            } else {
+              track_play = true;
+              pause_time = -1; //redundant... just in case...
+            }
         }else if (nv.deviceMode == RADIO_MODE) {
           print_rad_info();
+          rad_pause_timer = 0;
           if (radio_play){
             set_rad_vol(-1);
             radio_play = false;
@@ -1071,7 +1088,7 @@ void button_tick()
         //SD.end();
 
         //play power down jingle
-        jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN - 0.25);       //takes ~2 seconds
+        jingle(JINGLE_POWER_DOWN, 0.1);       //takes ~2 seconds
 
         //Check if USB is plugged in
         adc_set(ADC_PIN_USBVCC);
@@ -1108,6 +1125,22 @@ void button_tick()
         }
 
       }
+  } else {  //if button hasn't been pressed
+    if ((millis() >= LED_fade_timer) && !LED_power_save) {
+      Serial.println("fade leds");
+      io.pwm(1, 0); io.pwm(2, 0); io.pwm(3, 0); io.pwm(4, 0); 
+      for (int i = 254; i>=0; i--){ 
+        if (nv.deviceVolume>=0)   io.pwm(1, i);
+        if (nv.deviceVolume>=4)   io.pwm(2, i);
+        if (nv.deviceVolume>=8)   io.pwm(3, i);
+        if (nv.deviceVolume>=12)  io.pwm(4, i);
+        int m_last = millis();
+        while((m_last+4) >= millis()){
+          track_tick(); //keep ticking audio file while fading out
+        }
+      }
+      LED_power_save = true;
+    }
   }
 }
 
@@ -1246,7 +1279,7 @@ void jingle(int id, float gain)
         //LED animations
         if ((id == JINGLE_POWER_UP) && (millis() >= (anim_last_time + anim_interval))) {
           anim_last_time = millis();
-          if (anim[0] < 40) anim[0]++; //this one is just for initial delay
+          if (anim[0] < 90) anim[0]++; //this one is just for initial delay
           else if (anim[1] < 185) anim[1]++;
           else if (anim[2] < 185) anim[2]++;
           else if (anim[3] < 185) anim[3]++;
@@ -1257,7 +1290,7 @@ void jingle(int id, float gain)
 
         if ((id == JINGLE_POWER_DOWN) && (millis() >= (anim_last_time + anim_interval))) {
           anim_last_time = millis();
-          if (anim[0] < 150) anim[0]++; //this one is just for initial delay
+          if (anim[0] < 100) anim[0]++; //this one is just for initial delay
           else if (anim[4] < 185) anim[4]++;
           else if (anim[3] < 185) anim[3]++;
           else if (anim[2] < 185) anim[2]++;
@@ -1446,7 +1479,6 @@ uint8_t vccToPercent(int vcc)
 
 
 //in certain modes (whenever not playing a track) device should go into light sleep periodically
-bool LED_power_save = false;
 void radio_sleep_tick()
 {
   
@@ -1493,6 +1525,11 @@ void radio_sleep_tick()
   // works, but wipes memory
   //ESP.deepSleep(15000000);
 
+  if (!radio_play) {
+    rad_pause_timer += RADIO_SLEEP_INTERVAL;
+    if (rad_pause_timer >= PAUSED_POWER_DOWN_TIMER) quiet_power_down();
+  }
+
   //Check voltage
   if(digitalRead(D3)){    //if wokeup from sleep timer (not a button press)
     adc_set(ADC_PIN_VCC);
@@ -1532,7 +1569,7 @@ void radio_sleep_tick()
         if (nv.deviceVolume>=4)   io.pwm(2, i);
         if (nv.deviceVolume>=8)   io.pwm(3, i);
         if (nv.deviceVolume>=12)  io.pwm(4, i);
-        delay(1);   
+        delay(5);   
       }
       LED_power_save = true;
     }
@@ -1627,7 +1664,7 @@ void LV_handle()
   //SD.end();
 
   //play power down jingle
-  jingle(JINGLE_POWER_DOWN, DEFAULT_JINGLE_GAIN - 0.25);       //takes ~2 seconds
+  jingle(JINGLE_POWER_DOWN, 0.1);       //takes ~2 seconds
 
   //safely end SPIFFS
   LittleFS.end();
@@ -1644,4 +1681,82 @@ void LV_handle()
   
   //should never reach this
   while(1){}
+}
+
+float track_gain_convert()
+{
+  return (((nv.deviceVolume/100.0) * (nv.deviceVolume*0.5))) + 0.015; //~0.02 - 1.14
+}
+
+int radio_gain_convert()
+{
+  //~10 - 63
+  return map(nv.deviceVolume, MIN_DEVICE_VOL, MAX_DEVICE_VOL, RADIO_MIN_GAIN, RADIO_MAX_GAIN);    
+}
+
+void pause_powerdown_check()
+{
+  //only for track mode...
+  if (nv.deviceMode == RADIO_MODE) return;
+  if (track_play) return;
+  if (millis() < (pause_time + PAUSED_POWER_DOWN_TIMER)) return;
+
+  Serial.println("paused for to long... powering down");
+  quiet_power_down();
+}
+
+void quiet_power_down()
+{
+    
+  //update track frame last second...
+  if (nv.deviceMode == TRACK_MODE) nv.trackFrame = file->getPos();
+
+  //set all the params in nonVol memory 
+  nv.set_nonVols();
+
+
+  //avoid "click" on radio power down
+  digitalWrite(MUTE_PIN, MUTE); 
+  delay(150);  
+  //power down radio
+  powerdown_radio();
+  
+  //SD.end();
+
+  //don't play jingle....
+  //jingle(JINGLE_POWER_DOWN, 0.1);       //takes ~2 seconds
+
+  //Check if USB is plugged in
+  adc_set(ADC_PIN_USBVCC);
+  delay(100);
+  if (adc_get(ADC_PIN_USBVCC) > 4500) {
+    
+    Serial.println("charging loop");
+    charging_loop();
+
+    
+    Serial.println("resuming playback");
+    //when returned, resume...
+    //init either radio or player...
+    device_init();
+
+
+  } else {
+
+    //safely end SPIFFS
+    LittleFS.end();
+
+    //power down board
+    io.reset();
+    io.OSCIO_set(LOW);
+    delay(5000);  //wait for latch circuit to die
+
+    //if still on at this point, USB is keeping on, 
+    //so reset the device and go into charging animation...
+    Serial.println("reseting device...");
+    ESP.restart();
+    
+    //should never reach this
+    while(1){}
+  }
 }
