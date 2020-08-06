@@ -69,10 +69,10 @@ AudioFileSourceID3 *id3;
 
 
 static const int fm_addr = 0x11;   //i2c address for si4734 (0x63 for SEN = HIGH, 0x11 for SEN = LOW)
-int SDIO = D2;
-int SCLK = D1;
+int SDIO = 4;
+int SCLK = 5;
 
-#define MUTE_PIN D0
+#define MUTE_PIN 16
 
 
 
@@ -631,7 +631,7 @@ void setup()
   io.init();
   for(int i = 1; i<= 4; i++) io.pwm(i, 0);
   io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
-  pinMode(D3, INPUT); //!IO_INT pin as input
+  pinMode(0, INPUT); //!IO_INT pin as input
 
   pinMode(MUTE_PIN, OUTPUT);
   digitalWrite(MUTE_PIN, 0);
@@ -905,7 +905,7 @@ void track_tick()
 int LED_fade_timer = LED_FADEOUT_TIME;
 void button_tick()
 {
-  if(!digitalRead(D3)){ //if !IO_INT is triggered... read buttons
+  if(!digitalRead(0)){ //if !IO_INT is triggered... read buttons
       //bring back LEDs if they faded out
       updateLED();
       LED_power_save = false;
@@ -1157,9 +1157,9 @@ void readSD()
   Serial.println("switching to SD card...");
 
   //switch ESP SD pins to high impedance
-  pinMode(D5, INPUT);
-  pinMode(D6, INPUT);
-  pinMode(D7, INPUT);
+  pinMode(5, INPUT);
+  pinMode(6, INPUT);
+  pinMode(7, INPUT);
 
   //orient USB MUX from serial to SD
   io.digitalWrite(MUX_SEL, HIGH);
@@ -1326,7 +1326,7 @@ void adc_set(int pin)
 
   (!!(pin & 0b0001)) ? (SDA_HIGH(SDA)) : (SDA_LOW(SDA));
   (!!(pin & 0b0010)) ? (SCL_HIGH(SCLK)) : (SCL_LOW(SCLK));
-  (!!(pin & 0b0100)) ? (digitalWrite(D0, HIGH)) : (digitalWrite(D0, LOW));
+  (!!(pin & 0b0100)) ? (digitalWrite(16, HIGH)) : (digitalWrite(16, LOW));
   
   //STILL NEED TO ADD 3RD CONTROL LINE...
 
@@ -1426,7 +1426,7 @@ void charging_loop()
       //adjust pwm
       io.pwm(breathing_LED, i); 
       //check if POW was pressed
-      if(!digitalRead(D3)){ 
+      if(!digitalRead(0)){ 
         io.update_pinData();    
         if(io.digitalRead(SW_POW)) {
           latchPower();
@@ -1450,7 +1450,7 @@ void charging_loop()
       //adjust pwm
       io.pwm(breathing_LED, i); 
       //check if POW was pressed
-      if(!digitalRead(D3)){ 
+      if(!digitalRead(0)){ 
         io.update_pinData();    
         if(io.digitalRead(SW_POW)) {
           latchPower();
@@ -1531,7 +1531,7 @@ void radio_sleep_tick()
   }
 
   //Check voltage
-  if(digitalRead(D3)){    //if wokeup from sleep timer (not a button press)
+  if(digitalRead(0)){    //if wokeup from sleep timer (not a button press)
     adc_set(ADC_PIN_VCC);
     delay(10);
     int mv = adc_get(ADC_PIN_VCC);

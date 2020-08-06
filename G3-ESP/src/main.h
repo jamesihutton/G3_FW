@@ -29,7 +29,7 @@
 
 #define 		LED_FADEOUT_TIME		60000	//to save power. Only affects track mode (for radio, this will just = sleep interval)	
 
-#define			PAUSED_POWER_DOWN_TIMER	20000	//turn off after this much time when paused
+#define			PAUSED_POWER_DOWN_TIMER	240000	//turn off after this much time when paused
 
 
 
