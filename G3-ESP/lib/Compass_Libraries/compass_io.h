@@ -7,7 +7,7 @@
 
 #include <Wire.h>
 #include "compass.h"
-#include <arduino.h>
+#include <Arduino.h>
 
 
 #define			SX1509_ADDR		0X3E
