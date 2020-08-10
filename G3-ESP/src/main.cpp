@@ -626,6 +626,8 @@ void setup()
 {
   Serial.begin(9600); Serial.println("\n\nboot\n\n");
   delay(100);
+  Serial.print("Firmware Rev: ");
+  Serial.println(FW_REV);
   
   // Set pinModes
   io.init();
@@ -1054,7 +1056,10 @@ void button_tick()
       }
 
       if(io.digitalRead(SW_Q)){
-        
+        //feature not yet enabled...
+
+
+        /*
         //update track frame last second...
         nv.trackFrame = file->getPos();
 
@@ -1065,7 +1070,7 @@ void button_tick()
         LittleFS.end();
         
         readSD();
-        
+        */
         
       }
 
@@ -1157,9 +1162,9 @@ void readSD()
   Serial.println("switching to SD card...");
 
   //switch ESP SD pins to high impedance
-  pinMode(5, INPUT);
-  pinMode(6, INPUT);
-  pinMode(7, INPUT);
+  pinMode(14, INPUT);
+  pinMode(12, INPUT);
+  pinMode(13, INPUT);
 
   //orient USB MUX from serial to SD
   io.digitalWrite(MUX_SEL, HIGH);
@@ -1432,6 +1437,8 @@ void charging_loop()
           latchPower();
           for (i = 1; i<=4; i++) {io.pwm(i, 0);}  //enable all LEDs
           return;
+        } else if (io.digitalRead(SW_VDOWN) && io.digitalRead(SW_VUP)) {
+          readSD();
         }
           
       }
@@ -1455,6 +1462,8 @@ void charging_loop()
         if(io.digitalRead(SW_POW)) {
           latchPower();
           return;  
+        } else if (io.digitalRead(SW_VDOWN) && io.digitalRead(SW_VUP)) {
+          readSD();
         }
       }
       delay(1);
