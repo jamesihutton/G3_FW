@@ -27,7 +27,7 @@ class nonVol
         int folderIndex;            //Index of the current folder
         int trackIndex;             //Index of the current track in the folder
         int trackFrame;             //frame of current track (position)
-        int radioChannel;           //frame of current track (position)
+        int radioChannel;           //current radio frequency
         
         /**********************************************************
          * when adding parameters, ensure you also add them to 
