@@ -76,6 +76,8 @@ public:
 	bool digitalRead(uint16_t pin);							//simply returns the pinData for that pin...MUST UPDATE BEFORE READING!
 
 	bool pwm(uint8_t led, uint8_t intensity);
+
+	void setAllLEDs(uint8_t value);
 };
 
 typedef SX1509 sx1509Class;

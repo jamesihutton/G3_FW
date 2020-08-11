@@ -307,9 +307,9 @@ bool init_radio()
   if (!resp) {
     while(1){
       Serial.println("\n\nCould not connect to SD card\n\n");
-     io.digitalWrite(LED1, 1);io.digitalWrite(LED2, 1);io.digitalWrite(LED3, 1);io.digitalWrite(LED4, 1);
+     io.setAllLEDs(1);
      delay(400);
-     io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
+     io.setAllLEDs(0);
      delay(400);
     }
   } 
@@ -641,11 +641,11 @@ void setup()
   // Set pinModes
   io.init();
   for(int i = 1; i<= 4; i++) io.pwm(i, 0);
-  io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
+  io.setAllLEDs(0);
   pinMode(0, INPUT); //!IO_INT pin as input
 
   pinMode(MUTE_PIN, OUTPUT);
-  unmute_amp;
+  unmute_amp();
  
   
 
@@ -706,9 +706,9 @@ void setup()
   if (!resp) {
     while(1){
       Serial.println("\n\nCould not connect to SD card\n\n");
-     io.digitalWrite(LED1, 1);io.digitalWrite(LED2, 1);io.digitalWrite(LED3, 1);io.digitalWrite(LED4, 1);
+     io.setAllLEDs(1);
      delay(400);
-     io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
+     io.setAllLEDs(0);
      delay(400);
     }
   }
@@ -777,9 +777,9 @@ void device_init()
   if (!resp) {
     while(1){
       Serial.println("\n\nCould not connect to SD card\n\n");
-     io.digitalWrite(LED1, 1);io.digitalWrite(LED2, 1);io.digitalWrite(LED3, 1);io.digitalWrite(LED4, 1);
+     io.setAllLEDs(1);
      delay(400);
-     io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
+     io.setAllLEDs(0);
      delay(400);
     }
   }
@@ -1414,7 +1414,7 @@ void handle_wakeup()
 void charging_loop()
 {
   io.init();
-  io.digitalWrite(LED1, 0);io.digitalWrite(LED2, 0);io.digitalWrite(LED3, 0);io.digitalWrite(LED4, 0);
+  io.setAllLEDs(0);
   int vcc;
   while(1){
     adc_print_all(); //for debugging
