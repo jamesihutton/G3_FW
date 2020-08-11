@@ -207,9 +207,18 @@ void listFiles()
 #define UNMUTE        0
 #define MUTE_MS       0   //the amount of ms to mute into each track (to avoid "click")
 #define PRE_MUTE_MS   100 //the amount of ms to mute BEFORE each track
+
+void mute_amp() {
+  digitalWrite(MUTE_PIN, MUTE);
+}
+
+void unmute_amp() {
+  digitalWrite(MUTE_PIN, UNMUTE);
+}
+
 void init_track()
 {
-  digitalWrite(MUTE_PIN, MUTE); //mute amp
+  mute_amp();
   delay(PRE_MUTE_MS);
   if (track_initialized){
     if (mp3->isRunning()) {
@@ -271,7 +280,7 @@ void init_track()
   int start_time = millis();
   while(1){
     if (millis() >= (start_time + MUTE_MS)){
-      digitalWrite(MUTE_PIN, UNMUTE);
+      unmute_amp();
       break;
     }
     ESP.wdtFeed();
@@ -286,7 +295,7 @@ void init_track()
 bool init_radio()
 {
 
-  digitalWrite(MUTE_PIN, MUTE);   //mute during init to avoid pops
+  mute_amp();   //mute during init to avoid pops
   
   //RESET radio (and SD card...)
   SD.end();
@@ -435,7 +444,7 @@ bool init_radio()
   radio_play = true;
 
   delay(MUTE_RADIO_MS);
-  digitalWrite(MUTE_PIN, UNMUTE);
+  unmute_amp();
 
   return 1; //success
 
@@ -579,7 +588,7 @@ void switch_mode_radio()
 void switch_mode_track()
 {
   //avoid "click" on radio power down
-  digitalWrite(MUTE_PIN, MUTE); 
+  mute_amp(); 
   delay(150);  
   powerdown_radio();
 
@@ -636,7 +645,7 @@ void setup()
   pinMode(0, INPUT); //!IO_INT pin as input
 
   pinMode(MUTE_PIN, OUTPUT);
-  digitalWrite(MUTE_PIN, 0);
+  unmute_amp;
  
   
 
@@ -1085,7 +1094,7 @@ void button_tick()
 
 
         //avoid "click" on radio power down
-        digitalWrite(MUTE_PIN, MUTE); 
+        mute_amp(); 
         delay(150);  
         //power down radio
         powerdown_radio();
@@ -1225,7 +1234,7 @@ AudioOutputI2S *out_progmem;
 
 void jingle(int id, float gain)
 {
-    digitalWrite(MUTE_PIN, MUTE);
+    mute_amp();
     delay(PRE_MUTE_MS);
     audioLogger = &Serial;
     switch(id)
@@ -1271,10 +1280,10 @@ void jingle(int id, float gain)
     while(1){
         if (wav_progmem->isRunning()){
             if (millis() >= (start_time + MUTE_MS)){
-              digitalWrite(MUTE_PIN, UNMUTE);
+              unmute_amp();
             }
             if (!wav_progmem->loop()){
-            digitalWrite(MUTE_PIN, MUTE); //mute amp
+            mute_amp();
             wav_progmem->stop();
             return;
             }
@@ -1553,7 +1562,7 @@ void radio_sleep_tick()
       delay(10);
       if (adc_get(ADC_PIN_USBVCC) < 200) {
         //Mute Radio
-        digitalWrite(MUTE_PIN, MUTE);
+        mute_amp();
         delay(400);
         powerdown_radio();
 
@@ -1565,7 +1574,7 @@ void radio_sleep_tick()
         init_radio();
         radio_play = resume_play;
         if(!radio_play) set_rad_vol(-1);
-        digitalWrite(MUTE_PIN, UNMUTE);
+        unmute_amp();
       }
     }
 
@@ -1725,7 +1734,7 @@ void quiet_power_down()
 
 
   //avoid "click" on radio power down
-  digitalWrite(MUTE_PIN, MUTE); 
+  mute_amp(); 
   delay(150);  
   //power down radio
   powerdown_radio();
