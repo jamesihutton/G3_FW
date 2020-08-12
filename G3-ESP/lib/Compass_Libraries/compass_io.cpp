@@ -226,3 +226,12 @@ bool SX1509::pwm(uint8_t led, uint8_t intensity)
 	if(!Wire.endTransmission())	return 1;		//success
 	else return 0;
 }
+
+
+void SX1509::setAllLEDs(uint8_t value)
+{
+	SX1509::digitalWrite(LED1, value);
+	SX1509::digitalWrite(LED2, value);
+	SX1509::digitalWrite(LED3, value);
+	SX1509::digitalWrite(LED4, value);
+}
