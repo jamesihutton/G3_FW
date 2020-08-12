@@ -11,23 +11,15 @@ extern "C" {
 // only if you want wifi shut down completely
 // if you dont need wifi, this has lowest wakeup power spike
 RF_MODE(RF_DISABLED);   
-
-#define SLEEP_TIME   15  //light sleep intervals are this many seconds
  ////////////////////////////////////////////////////////////////////////////
 
 #include <Arduino.h>
 
-
-
-
-
 #include "main.h"
 #include "compass.h" 
-#include "compass_io.h" 
+#include "compass_io.h" // Include SX1509 library
 #include "compass_nonVols.h"
 #include "compass_jingles.h"
-
-
 
 #include <Wire.h>
 #include "string.h"
@@ -36,22 +28,6 @@ RF_MODE(RF_DISABLED);
 #include <SD.h>
 #include "LittleFS.h"
 // You may need a fast SD card. Set this as high as it will work (40MHz max).
-#define SPI_SPEED   SD_SCK_MHZ(40)
-#define SD_CS       17    //a non-existent pin 
-
-// Root of FS on SD card
-File root;
-
-
-//////////////////////////////////////////////////////////////////////////////
-#include <Wire.h>
-#include "compass_io.h" // Include SX1509 library
-SX1509 io; // Create an SX1509 object to be used throughout
-//////////////////////////////////////////////////////////////////////////////
-
-// Persistent memory object
-nonVol nv;
-
 
 #include "AudioFileSourcePROGMEM.h"
 #include "AudioFileSourceSD.h"
@@ -60,15 +36,11 @@ nonVol nv;
 #include "AudioGeneratorWAV.h"
 #include "AudioOutputI2S.h"
 
-AudioGeneratorWAV *wav;
-AudioGeneratorMP3 *mp3;
-AudioFileSourceSD *file;
-AudioOutputI2S *out;
-AudioFileSourceID3 *id3;
 
+#define SPI_SPEED   SD_SCK_MHZ(40)
+#define SD_CS       17    //a non-existent pin 
 
-
-static const int fm_addr = 0x11;   //i2c address for si4734 (0x63 for SEN = HIGH, 0x11 for SEN = LOW)
+#define fm_addr 0x11   //i2c address for si4734 (0x63 for SEN = HIGH, 0x11 for SEN = LOW)
 #define SDIO 4
 #define SCLK 5
 
@@ -78,12 +50,9 @@ static const int fm_addr = 0x11;   //i2c address for si4734 (0x63 for SEN = HIGH
 #define MUTE_MS       0   //the amount of ms to mute into each track (to avoid "click")
 #define PRE_MUTE_MS   100 //the amount of ms to mute BEFORE each track
 
-
-int channel = 9470;
 #define fm_max 10790
 #define fm_min  8790
 //#define fm_min  6410  //can go lower than general fm channels on fm mode...
-char rdsBuffer[10];
 
 #define TRACK_MAX_GAIN    1.5   //
 #define TRACK_MIN_GAIN    0.01   //
@@ -93,16 +62,38 @@ char rdsBuffer[10];
 
 #define MAX_DEVICE_VOL    15    //used for both Radio and MP3 nv.deviceVolume!
 #define MIN_DEVICE_VOL    1
-float track_gain = 0.3;     //starting level
 
+#define TRACK_MODE 0
+#define RADIO_MODE 1
+
+#define   MUTE_RADIO_MS   1  //amount of ms to mute amp when switching to radio mode (to avoid pop)
+
+
+
+AudioGeneratorWAV *wav;
+AudioGeneratorMP3 *mp3;
+AudioFileSourceSD *file;
+AudioOutputI2S *out;
+AudioFileSourceID3 *id3;
+
+// Create an SX1509 object to be used throughout
+SX1509 io;
+
+// Root of FS on SD card
+File root;
+
+// Persistent memory object
+nonVol nv;
+
+char rdsBuffer[10];
+
+float track_gain = 0.3;     //starting level
 
 String track_name[100];
 int track_count = 0;
 
-
 String folder_name[70];
 int folder_count = 0;
-
 
 bool track_initialized = 0; //only happens first time
 
@@ -110,10 +101,6 @@ bool track_play = false;
 bool radio_play = false;
 
 bool LED_power_save = false;  //flag if LEDs have faded to save power
-
-#define TRACK_MODE 0
-#define RADIO_MODE 1
-
 
 
 void listFolders()
@@ -189,10 +176,11 @@ void listFiles()
     File entry = root.openNextFile();
      if (! entry) break;
     String s = entry.name();
+    String filetype = s.substring(s.length() - 4);
+    filetype.toLowerCase();
     //Serial.println(s);
     //check if mp3 file
-    if (((s[s.length()-4] == '.') && (s[s.length()-3] == 'm') && (s[s.length()-2] == 'p') && (s[s.length()-1] == '3'))
-    ||((s[s.length()-4] == '.') && (s[s.length()-3] == 'w') && (s[s.length()-2] == 'a') && (s[s.length()-1] == 'v')))
+    if(filetype == ".mp3" || filetype == ".wav")
     {
       track_name[i] = s;
       i++;
@@ -261,14 +249,11 @@ void init_track()
 
   file->seek(nv.trackFrame, SEEK_SET);
   Serial.printf("@FRAME: %i\n", nv.trackFrame);
-//  Serial.println("@FRAME: "); Serial.println(nv.trackFrame);
   track_initialized = true; //raised forever after first init
 
   track_gain = track_gain_convert();
   out->SetGain(track_gain);
   Serial.printf("\ngain = %f\n", track_gain);
-//  Serial.print("\ngain = ");
-//  Serial.println(track_gain);
   
   //mute amp for "MUTE_MS" milliseconds into track (to avoid "click")
   int start_time = millis();
@@ -285,7 +270,6 @@ void init_track()
 }
 
 
-#define   MUTE_RADIO_MS   1  //amount of ms to mute amp when switching to radio mode (to avoid pop)
 bool init_radio()
 {
   mute_amp();   //mute during init to avoid pops
@@ -523,8 +507,7 @@ int set_rad_vol(int vol)
   Wire.write(vhex);  // 0-63
   Wire.endTransmission();
   delay(200);
-  Serial.print("\nRadio volume set to ");
-  Serial.println(vhex);
+  Serial.printf("\nRadio volume set to %i\n", vhex);
 }
 
 int set_rad_chan(int chan) 
@@ -540,8 +523,7 @@ int set_rad_chan(int chan)
   Wire.write(0x00);  
   int resp = Wire.endTransmission();
   delay(200);
-  Serial.print("Set to channel: ");
-  Serial.println(chan);
+  Serial.printf("Set to channel: %i\n", chan);
   return (!resp);
 }
 
@@ -628,8 +610,7 @@ void setup()
 {
   Serial.begin(9600); Serial.println("\n\nboot\n\n");
   delay(100);
-  Serial.print("Firmware Rev: ");
-  Serial.println(FW_REV);
+  Serial.printf("Firmware Rev: %s\n", FW_REV);
   
   // Set pinModes
   io.init();
@@ -928,7 +909,7 @@ void button_tick()
         init_track();
         */
         out->SetGain(track_gain);
-        Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
+        Serial.printf("%i (%f)\n", nv.deviceVolume, track_gain);
         updateLED();
       } else if (nv.deviceMode == RADIO_MODE) {
         nv.deviceVolume ++;
@@ -955,7 +936,7 @@ void button_tick()
         */
 
         out->SetGain(track_gain);
-        Serial.print(nv.deviceVolume); Serial.print(" ("); Serial.print(track_gain); Serial.println(")");
+        Serial.printf("%i (%f)\n", nv.deviceVolume, track_gain);
         updateLED();
       } else if (nv.deviceMode == RADIO_MODE) {
         nv.deviceVolume --;
