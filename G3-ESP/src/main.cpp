@@ -18,7 +18,7 @@ RF_MODE(RF_DISABLED);
 #include "main.h"
 #include "compass.h" 
 #include "compass_io.h" // Include SX1509 library
-#include "compass_nonVols.h"
+#include "PStore.h"
 #include "compass_jingles.h"
 #include "CPFunctions.h"
 #include "CPSettings.h"
@@ -28,7 +28,6 @@ RF_MODE(RF_DISABLED);
 #include <twi.h>
 #include <SPI.h>
 #include <SD.h>
-#include "LittleFS.h"
 // You may need a fast SD card. Set this as high as it will work (40MHz max).
 
 #include "AudioFileSourcePROGMEM.h"
@@ -54,7 +53,7 @@ SX1509 io;
 File root;
 
 // Persistent memory object
-nonVol nv;
+PStore *nv;
 
 char rdsBuffer[10];
 
@@ -138,8 +137,7 @@ void listFolders()
 
 void listFiles()
 {
-  root = SD.open(folder_name[nv.folderIndex
-  ]);
+  root = SD.open(folder_name[nv->folderIndex]);
 
   int i = 0;
   while(1)
@@ -177,14 +175,14 @@ void init_track()
   int i;
   for (i = 0; i<100; i++)
   {
-    s[i] = folder_name[nv.folderIndex][i];
-    if (!(folder_name[nv.folderIndex][i])) break;
+    s[i] = folder_name[nv->folderIndex][i];
+    if (!(folder_name[nv->folderIndex][i])) break;
   }
   int j = 0;
   for (i = i; i<100; i++)
   {
-    s[i] = track_name[nv.trackIndex][j];
-    if (!(track_name[nv.trackIndex][j])) break;
+    s[i] = track_name[nv->trackIndex][j];
+    if (!(track_name[nv->trackIndex][j])) break;
     j++;
   }
 
@@ -210,8 +208,8 @@ void init_track()
     wav->begin(id3, out);
   }
 
-  file->seek(nv.trackFrame, SEEK_SET);
-  Serial.printf("@FRAME: %i\n", nv.trackFrame);
+  file->seek(nv->trackFrame, SEEK_SET);
+  Serial.printf("@FRAME: %i\n", nv->trackFrame);
   track_initialized = true; //raised forever after first init
 
   track_gain = track_gain_convert();
@@ -229,7 +227,7 @@ void init_track()
     track_tick();
   }
   
-  //nv.set_nonVols(); //not sure if I want to update every time... only on power down?
+  //nv->save(); //not sure if I want to update every time... only on power down?
 }
 
 
@@ -378,8 +376,8 @@ bool init_radio()
   delay(200);
   */
 
-  set_rad_vol(nv.deviceVolume);
-  set_rad_chan(nv.radioChannel);
+  set_rad_vol(nv->deviceVolume);
+  set_rad_chan(nv->radioChannel);
 
   radio_play = true;
 
@@ -425,7 +423,7 @@ int rad_seek(bool dir)
         resp[i] = Wire.read();
       }
       int freq = (resp[2] <<  8) | resp[3];    
-      nv.radioChannel = freq;
+      nv->radioChannel = freq;
       Serial.printf("\nRadio seeked to: %i", freq);
       Serial.printf("\nRSSI: \t\t%i dB", resp[4]);
       Serial.printf("\nSNR: \t\t%i dB", resp[5]);
@@ -450,7 +448,7 @@ void print_rad_info()
     resp[i] = Wire.read();
   }
   int freq = (resp[2] <<  8) | resp[3];    
-  nv.radioChannel = freq;
+  nv->radioChannel = freq;
   Serial.printf("\nChannel: %i", freq);
   Serial.printf("\nRSSI: \t\t%i dB", resp[4]);
   Serial.printf("\nSNR: \t\t%i dB", resp[5]);
@@ -509,8 +507,8 @@ void switch_mode_radio()
     Serial.println("Radio initted...");
     track_play = false;
     radio_play = true;
-    nv.deviceMode = RADIO_MODE;
-    nv.trackFrame = file->getPos();
+    nv->deviceMode = RADIO_MODE;
+    nv->trackFrame = file->getPos();
     if (mp3->isRunning()) {
       mp3->stop();
     } else if (wav->isRunning()) {
@@ -531,7 +529,7 @@ void switch_mode_track()
   powerdown_radio();
 
   SD.begin(SD_CS, SPI_SPEED); 
-  nv.deviceMode = TRACK_MODE;
+  nv->deviceMode = TRACK_MODE;
   radio_play = false;
   track_play = true;
   init_track();
@@ -650,31 +648,21 @@ void setup()
     }
   }
 
-    
+  nv = new PStore();
 
-  //UPDATE NONVOLS
-  //Initialize File System
-  if(LittleFS.begin())  Serial.println("SPIFFS Initialize....ok");
-  else                Serial.println("SPIFFS Initialization...failed");
- 
-  //Format File System
+  // If SW_Q then reset PStore values
   if(io.digitalRead(SW_Q)){
-    if(LittleFS.format()) Serial.println("File System Formated");
-    else                Serial.println("File System Formatting Error");
+    nv->resetValues();
   }
 
-  nv.get_nonVols();
-  
-
-
   //init either radio or player...
-  if (nv.deviceMode == TRACK_MODE) {
+  if (nv->deviceMode == TRACK_MODE) {
     Serial.println("INIT TRACK");
     listFolders();
     listFiles();
     init_track();
     track_play = true;
-  } else if (nv.deviceMode == RADIO_MODE) {
+  } else if (nv->deviceMode == RADIO_MODE) {
     Serial.println("INIT RADIO");
     init_radio();
     listFolders();
@@ -721,31 +709,20 @@ void device_init()
     }
   }
 
-    
-
-  //UPDATE NONVOLS
-  //Initialize File System
-  if(LittleFS.begin())  Serial.println("SPIFFS Initialize....ok");
-  else                Serial.println("SPIFFS Initialization...failed");
- 
   //Format File System
   if(io.digitalRead(SW_Q)){
-    if(LittleFS.format()) Serial.println("File System Formated");
-    else                Serial.println("File System Formatting Error");
+    nv->resetValues();
   }
-
-  nv.get_nonVols();
-  
 
 
   //init either radio or player...
-  if (nv.deviceMode == TRACK_MODE) {
+  if (nv->deviceMode == TRACK_MODE) {
     Serial.println("INIT TRACK");
     listFolders();
     listFiles();
     init_track();
     track_play = true;
-  } else if (nv.deviceMode == RADIO_MODE) {
+  } else if (nv->deviceMode == RADIO_MODE) {
     Serial.println("INIT RADIO");
     init_radio();
     listFolders();
@@ -781,14 +758,14 @@ void loop()
 
   if (!(ms%5)){
     button_tick();
-    if(nv.deviceMode == RADIO_MODE)
+    if(nv->deviceMode == RADIO_MODE)
       radio_sleep_tick();
 
     //pause checker
     pause_powerdown_check();
   }
 
-  if ((ms >= next_LV_check) && (nv.deviceMode == TRACK_MODE)){
+  if ((ms >= next_LV_check) && (nv->deviceMode == TRACK_MODE)){
     adc_set(ADC_PIN_VCC);
     delay(10);
     int mv = adc_get(ADC_PIN_VCC);
@@ -803,7 +780,7 @@ void loop()
         if (adc_get(ADC_PIN_USBVCC) < 200) {
           //stop current track
           int resume_playing = track_play;
-          nv.trackFrame = file->getPos();
+          nv->trackFrame = file->getPos();
           if (mp3->isRunning()) {
             mp3->stop();
           } else if (wav->isRunning()) {
@@ -830,18 +807,18 @@ void track_tick()
   if (track_play){
     if (mp3->isRunning()) {
       if (!mp3->loop()) { //play next file
-        nv.trackIndex++;
-        nv.trackFrame=0;
-        if (nv.trackIndex >= (track_count))
-          nv.trackIndex = 0;  //loop back to 0 after last song
+        nv->trackIndex++;
+        nv->trackFrame=0;
+        if (nv->trackIndex >= (track_count))
+          nv->trackIndex = 0;  //loop back to 0 after last song
         init_track();
       }
     } else if (wav->isRunning()){
       if (!wav->loop()) { //play next file
-        nv.trackIndex++;
-        nv.trackFrame=0;
-        if (nv.trackIndex >= (track_count))
-          nv.trackIndex = 0;  //loop back to 0 after last song
+        nv->trackIndex++;
+        nv->trackFrame=0;
+        if (nv->trackIndex >= (track_count))
+          nv->trackIndex = 0;  //loop back to 0 after last song
         init_track();
       }
     }
@@ -861,25 +838,25 @@ void button_tick()
     Serial.println("button pressed");
     io.update_pinData();    //this must be called before reading any pins! (reads them all at once in one command...)
     if(io.digitalRead(SW_VUP)){
-      if (nv.deviceMode == TRACK_MODE) {
-        nv.deviceVolume ++;
-        if (nv.deviceVolume > MAX_DEVICE_VOL)
-          nv.deviceVolume = MAX_DEVICE_VOL;
+      if (nv->deviceMode == TRACK_MODE) {
+        nv->deviceVolume ++;
+        if (nv->deviceVolume > MAX_DEVICE_VOL)
+          nv->deviceVolume = MAX_DEVICE_VOL;
         track_gain = track_gain_convert();
         /*
-        nv.trackFrame = file->getPos();
+        nv->trackFrame = file->getPos();
         jingle(JINGLE_TICK, track_gain); //play the tick sound  
         init_track();
         */
         out->SetGain(track_gain);
-        Serial.printf("%i (%f)\n", nv.deviceVolume, track_gain);
+        Serial.printf("%i (%f)\n", nv->deviceVolume, track_gain);
         updateLED();
-      } else if (nv.deviceMode == RADIO_MODE) {
-        nv.deviceVolume ++;
-        if (nv.deviceVolume > MAX_DEVICE_VOL)
-          nv.deviceVolume = MAX_DEVICE_VOL;
+      } else if (nv->deviceMode == RADIO_MODE) {
+        nv->deviceVolume ++;
+        if (nv->deviceVolume > MAX_DEVICE_VOL)
+          nv->deviceVolume = MAX_DEVICE_VOL;
 
-        set_rad_vol(nv.deviceVolume);
+        set_rad_vol(nv->deviceVolume);
         displayInfo();
         updateLED();
       }
@@ -887,102 +864,102 @@ void button_tick()
 
     }
     if(io.digitalRead(SW_VDOWN)){
-      if (nv.deviceMode == TRACK_MODE) {
-        nv.deviceVolume --;
-        if (nv.deviceVolume < MIN_DEVICE_VOL)
-          nv.deviceVolume = MIN_DEVICE_VOL;
+      if (nv->deviceMode == TRACK_MODE) {
+        nv->deviceVolume --;
+        if (nv->deviceVolume < MIN_DEVICE_VOL)
+          nv->deviceVolume = MIN_DEVICE_VOL;
         track_gain = track_gain_convert();
         /*
-        nv.trackFrame = file->getPos();
+        nv->trackFrame = file->getPos();
         jingle(JINGLE_TICK, track_gain); //play the tick sound
         init_track();
         */
 
         out->SetGain(track_gain);
-        Serial.printf("%i (%f)\n", nv.deviceVolume, track_gain);
+        Serial.printf("%i (%f)\n", nv->deviceVolume, track_gain);
         updateLED();
-      } else if (nv.deviceMode == RADIO_MODE) {
-        nv.deviceVolume --;
-        if (nv.deviceVolume < MIN_DEVICE_VOL)
-          nv.deviceVolume = MIN_DEVICE_VOL;
-        set_rad_vol(nv.deviceVolume);
+      } else if (nv->deviceMode == RADIO_MODE) {
+        nv->deviceVolume --;
+        if (nv->deviceVolume < MIN_DEVICE_VOL)
+          nv->deviceVolume = MIN_DEVICE_VOL;
+        set_rad_vol(nv->deviceVolume);
         displayInfo();
         updateLED();
       }
 
     }
     if(io.digitalRead(SW_RIGHT)){
-      if (nv.deviceMode == TRACK_MODE) {
-        nv.trackIndex++;
-        if (nv.trackIndex >= (track_count))
-          nv.trackIndex = 0;  //loop back to 0 after last song
-        nv.trackFrame = 0;
+      if (nv->deviceMode == TRACK_MODE) {
+        nv->trackIndex++;
+        if (nv->trackIndex >= (track_count))
+          nv->trackIndex = 0;  //loop back to 0 after last song
+        nv->trackFrame = 0;
         init_track();
-      } else if (nv.deviceMode == RADIO_MODE) {
+      } else if (nv->deviceMode == RADIO_MODE) {
         //delay(1000);  //wait for i2c line to settle 
         rad_seek(1);
       }
 
     }
     if(io.digitalRead(SW_LEFT)){
-      if (nv.deviceMode == TRACK_MODE) {
-        nv.trackIndex--; 
-        if (nv.trackIndex < 0)
-          nv.trackIndex = track_count-1;  //loop to last song
-        nv.trackFrame = 0;
+      if (nv->deviceMode == TRACK_MODE) {
+        nv->trackIndex--; 
+        if (nv->trackIndex < 0)
+          nv->trackIndex = track_count-1;  //loop to last song
+        nv->trackFrame = 0;
         init_track();
-      } else if (nv.deviceMode == RADIO_MODE) {
+      } else if (nv->deviceMode == RADIO_MODE) {
         //delay(1000);  //wait for i2c line to settle 
         rad_seek(0);
       }
 
     }
     if(io.digitalRead(SW_UP)){
-      if (nv.deviceMode == TRACK_MODE) {
-        nv.folderIndex--;
-        if (nv.folderIndex < 0)
-          nv.folderIndex = folder_count-1;  //loop back to 0 after last folder
+      if (nv->deviceMode == TRACK_MODE) {
+        nv->folderIndex--;
+        if (nv->folderIndex < 0)
+          nv->folderIndex = folder_count-1;  //loop back to 0 after last folder
         listFiles();
-        nv.trackIndex = 0;
-        nv.trackFrame = 0;
+        nv->trackIndex = 0;
+        nv->trackFrame = 0;
         init_track();
-      } else if (nv.deviceMode == RADIO_MODE) {
-        nv.radioChannel += 10;
-        if (nv.radioChannel > fm_max+1)
-          nv.radioChannel = fm_min;
-        set_rad_chan(nv.radioChannel);
+      } else if (nv->deviceMode == RADIO_MODE) {
+        nv->radioChannel += 10;
+        if (nv->radioChannel > fm_max+1)
+          nv->radioChannel = fm_min;
+        set_rad_chan(nv->radioChannel);
         print_rad_info();
       }
 
     }
     if(io.digitalRead(SW_DOWN)){
-      if (nv.deviceMode == TRACK_MODE) {
-        nv.folderIndex++;
-        if (nv.folderIndex >= (folder_count))
-          nv.folderIndex = 0;  //loop back to 0 after last folder
+      if (nv->deviceMode == TRACK_MODE) {
+        nv->folderIndex++;
+        if (nv->folderIndex >= (folder_count))
+          nv->folderIndex = 0;  //loop back to 0 after last folder
         listFiles();
-        nv.trackIndex = 0;
-        nv.trackFrame = 0;
+        nv->trackIndex = 0;
+        nv->trackFrame = 0;
         init_track();
-      } else if (nv.deviceMode == RADIO_MODE) {
-        nv.radioChannel -= 10;
-        if (nv.radioChannel < fm_min-1)
-          nv.radioChannel = fm_max;
-        set_rad_chan(nv.radioChannel);
+      } else if (nv->deviceMode == RADIO_MODE) {
+        nv->radioChannel -= 10;
+        if (nv->radioChannel < fm_min-1)
+          nv->radioChannel = fm_max;
+        set_rad_chan(nv->radioChannel);
         print_rad_info();
       }
     }
     if(io.digitalRead(SW_MODE)){
-      if (nv.deviceMode == TRACK_MODE) {
+      if (nv->deviceMode == TRACK_MODE) {
         switch_mode_radio();
-      } else if (nv.deviceMode == RADIO_MODE) {
+      } else if (nv->deviceMode == RADIO_MODE) {
         switch_mode_track();
       }
-      Serial.println(nv.deviceMode);
+      Serial.println(nv->deviceMode);
     }
 
     if(io.digitalRead(SW_PLAY)){
-      if (nv.deviceMode == TRACK_MODE) {
+      if (nv->deviceMode == TRACK_MODE) {
           if (track_play) {
             track_play = false;    
             pause_time = millis();     
@@ -990,14 +967,14 @@ void button_tick()
             track_play = true;
             pause_time = -1; //redundant... just in case...
           }
-      } else if (nv.deviceMode == RADIO_MODE) {
+      } else if (nv->deviceMode == RADIO_MODE) {
         print_rad_info();
         rad_pause_timer = 0;
         if (radio_play){
           set_rad_vol(-1);
           radio_play = false;
         } else {
-          set_rad_vol(nv.deviceVolume);
+          set_rad_vol(nv->deviceVolume);
           radio_play = true;
         }
       }
@@ -1010,13 +987,13 @@ void button_tick()
 
       /*
       //update track frame last second...
-      nv.trackFrame = file->getPos();
+      nv->trackFrame = file->getPos();
 
       //set all the params in nonVol memory 
-      nv.set_nonVols();
+      nv->save();
 
       //safely end SPIFFS
-      LittleFS.end();
+      nv.close();
       
       readSD();
       */
@@ -1027,11 +1004,11 @@ void button_tick()
       Serial.println("power down sequence...");
       
       //update track frame last second...
-      if (nv.deviceMode == TRACK_MODE)
-        nv.trackFrame = file->getPos();
+      if (nv->deviceMode == TRACK_MODE)
+        nv->trackFrame = file->getPos();
 
       //set all the params in nonVol memory 
-      nv.set_nonVols();
+      nv->save();
 
 
       //avoid "click" on radio power down
@@ -1060,7 +1037,7 @@ void button_tick()
 
       } else {
         //safely end SPIFFS
-        LittleFS.end();
+        nv->close();
 
         //power down board
         io.reset();
@@ -1082,10 +1059,10 @@ void button_tick()
       Serial.println("fade leds");
       io.pwm(1, 0); io.pwm(2, 0); io.pwm(3, 0); io.pwm(4, 0); 
       for (int i = 254; i>=0; i--){ 
-        if (nv.deviceVolume>=0)   io.pwm(1, i);
-        if (nv.deviceVolume>=4)   io.pwm(2, i);
-        if (nv.deviceVolume>=8)   io.pwm(3, i);
-        if (nv.deviceVolume>=12)  io.pwm(4, i);
+        if (nv->deviceVolume>=0)   io.pwm(1, i);
+        if (nv->deviceVolume>=4)   io.pwm(2, i);
+        if (nv->deviceVolume>=8)   io.pwm(3, i);
+        if (nv->deviceVolume>=12)  io.pwm(4, i);
         int m_last = millis();
         while((m_last+4) >= millis()){
           track_tick(); //keep ticking audio file while fading out
@@ -1139,23 +1116,23 @@ void readSD()
 //remember, LEDs are reversed (0 = on)
 void updateLED(){
   io.pwm(1, 0); io.pwm(2, 0); io.pwm(3, 0); io.pwm(4, 0); //switched to using PWM, but check power consumption...
-  if (nv.deviceVolume>=0) {
+  if (nv->deviceVolume>=0) {
     io.pwm(1, 255);
   }
-  if (nv.deviceVolume>=4) {
+  if (nv->deviceVolume>=4) {
     io.pwm(2, 255);
   }
-  if (nv.deviceVolume>=8) {
+  if (nv->deviceVolume>=8) {
     io.pwm(3, 255);
   }
-  if (nv.deviceVolume>=12) {
+  if (nv->deviceVolume>=12) {
     io.pwm(4, 255);
   }
 }
 
 void displayInfo()
 {
-   Serial.printf("Channel: %i Volume: %i\n", nv.radioChannel, nv.deviceVolume);
+   Serial.printf("Channel: %i Volume: %i\n", nv->radioChannel, nv->deviceVolume);
 }
 
 
@@ -1516,10 +1493,10 @@ void radio_sleep_tick()
       Serial.println("fade leds");
       io.pwm(1, 0); io.pwm(2, 0); io.pwm(3, 0); io.pwm(4, 0); 
       for (int i = 254; i>=0; i--){ 
-        if (nv.deviceVolume>=0)   io.pwm(1, i);
-        if (nv.deviceVolume>=4)   io.pwm(2, i);
-        if (nv.deviceVolume>=8)   io.pwm(3, i);
-        if (nv.deviceVolume>=12)  io.pwm(4, i);
+        if (nv->deviceVolume>=0)   io.pwm(1, i);
+        if (nv->deviceVolume>=4)   io.pwm(2, i);
+        if (nv->deviceVolume>=8)   io.pwm(3, i);
+        if (nv->deviceVolume>=12)  io.pwm(4, i);
         delay(5);   
       }
       LED_power_save = true;
@@ -1607,10 +1584,10 @@ void LV_handle()
   Serial.println("BATTERY TO LOW, POWERING DOWN...");
     
   //update track frame last second...
-  if (nv.deviceMode == TRACK_MODE) nv.trackFrame = file->getPos();
+  if (nv->deviceMode == TRACK_MODE) nv->trackFrame = file->getPos();
 
   //set all the params in nonVol memory 
-  nv.set_nonVols();
+  nv->save();
   
   //SD.end();
 
@@ -1618,7 +1595,7 @@ void LV_handle()
   jingle(JINGLE_POWER_DOWN, 0.1);       //takes ~2 seconds
 
   //safely end SPIFFS
-  LittleFS.end();
+  nv->close();
 
   //power down board
   io.reset();
@@ -1636,19 +1613,19 @@ void LV_handle()
 
 float track_gain_convert()
 {
-  return (((nv.deviceVolume/100.0) * (nv.deviceVolume*0.5))) + 0.015; //~0.02 - 1.14
+  return (((nv->deviceVolume/100.0) * (nv->deviceVolume*0.5))) + 0.015; //~0.02 - 1.14
 }
 
 int radio_gain_convert()
 {
   //~10 - 63
-  return map(nv.deviceVolume, MIN_DEVICE_VOL, MAX_DEVICE_VOL, RADIO_MIN_GAIN, RADIO_MAX_GAIN);    
+  return map(nv->deviceVolume, MIN_DEVICE_VOL, MAX_DEVICE_VOL, RADIO_MIN_GAIN, RADIO_MAX_GAIN);    
 }
 
 void pause_powerdown_check()
 {
   //only for track mode...
-  if (nv.deviceMode == RADIO_MODE) return;
+  if (nv->deviceMode == RADIO_MODE) return;
   if (track_play) return;
   if (millis() < (pause_time + PAUSED_POWER_DOWN_TIMER)) return;
 
@@ -1660,10 +1637,10 @@ void quiet_power_down()
 {
     
   //update track frame last second...
-  if (nv.deviceMode == TRACK_MODE) nv.trackFrame = file->getPos();
+  if (nv->deviceMode == TRACK_MODE) nv->trackFrame = file->getPos();
 
   //set all the params in nonVol memory 
-  nv.set_nonVols();
+  nv->save();
 
 
   //avoid "click" on radio power down
@@ -1695,7 +1672,7 @@ void quiet_power_down()
   } else {
 
     //safely end SPIFFS
-    LittleFS.end();
+    nv->close();
 
     //power down board
     io.reset();
