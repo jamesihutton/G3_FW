@@ -34,11 +34,15 @@
 
 #define			PAUSED_POWER_DOWN_TIMER	240000	//turn off after this much time when paused
 
-
-
+#define 		initial_press_interval	500
+#define 		press_interval			200		//skip forward every 200ms held down
+#define			skip_bytes				50000	//bytes in file to skip each skip
 
 bool latchPower();
 void button_tick();
+void vup();
+void vdown();
+
 
 bool init_radio();
 int rad_seek(bool dir);

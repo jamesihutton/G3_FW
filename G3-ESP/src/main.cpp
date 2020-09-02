@@ -830,92 +830,176 @@ void track_tick()
 }
 
 int LED_fade_timer = LED_FADEOUT_TIME;
+uint32_t right_press_time = 0;
+bool right_pressed = 0;
+uint32_t left_press_time = 0;
+bool left_pressed = 0;
+bool ffw_occurred = 0;
+bool rw_occurred = 0;
+bool vdown_pressed = 0;
+uint32_t vdown_press_time = 0;
+bool vdown_hold = 0;
+bool vup_pressed = 0;
+uint32_t vup_press_time = 0;
+bool vup_hold = 0;
+
+
 void button_tick()
 {
-  if(!digitalRead(0)){ //if !IO_INT is triggered... read buttons
+  if(!digitalRead(0) || right_pressed || left_pressed || vdown_pressed || vup_pressed){ //if !IO_INT is triggered... read buttons
+    
     //bring back LEDs if they faded out
     updateLED();
     LED_power_save = false;
     LED_fade_timer = millis() + LED_FADEOUT_TIME;
 
-    Serial.println("button pressed");
+    //Serial.println("button pressed");
     io.update_pinData();    //this must be called before reading any pins! (reads them all at once in one command...)
-    if(io.digitalRead(SW_VUP)){
-      if (nv->deviceMode == TRACK_MODE) {
-        nv->deviceVolume ++;
-        if (nv->deviceVolume > MAX_DEVICE_VOL)
-          nv->deviceVolume = MAX_DEVICE_VOL;
-        track_gain = track_gain_convert();
-        /*
-        nv->trackFrame = file->getPos();
-        jingle(JINGLE_TICK, track_gain); //play the tick sound  
-        init_track();
-        */
-        out->SetGain(track_gain);
-        Serial.printf("%i (%f)\n", nv->deviceVolume, track_gain);
-        updateLED();
-      } else if (nv->deviceMode == RADIO_MODE) {
-        nv->deviceVolume ++;
-        if (nv->deviceVolume > MAX_DEVICE_VOL)
-          nv->deviceVolume = MAX_DEVICE_VOL;
-
-        set_rad_vol(nv->deviceVolume);
-        displayInfo();
-        updateLED();
+    
+    
+    if(io.digitalRead(SW_VUP)){     
+      if (!vup_pressed) {
+        vup_pressed = true;
+        vup_press_time = millis();
+        vup();
+      } else {
+        if (!vup_hold) {
+          if (millis() >= (vup_press_time + initial_press_interval)) {
+            vup_hold = true;
+            vup_press_time = millis();
+            vup();
+          }
+        } else {
+          if (millis() >= (vup_press_time + press_interval)) {
+            vup_press_time = millis();
+            vup();
+          }
+        }
       }
-
-
+    } else {
+      vup_hold = false;
+      vup_pressed = false;
     }
-    if(io.digitalRead(SW_VDOWN)){
-      if (nv->deviceMode == TRACK_MODE) {
-        nv->deviceVolume --;
-        if (nv->deviceVolume < MIN_DEVICE_VOL)
-          nv->deviceVolume = MIN_DEVICE_VOL;
-        track_gain = track_gain_convert();
-        /*
-        nv->trackFrame = file->getPos();
-        jingle(JINGLE_TICK, track_gain); //play the tick sound
-        init_track();
-        */
 
-        out->SetGain(track_gain);
-        Serial.printf("%i (%f)\n", nv->deviceVolume, track_gain);
-        updateLED();
-      } else if (nv->deviceMode == RADIO_MODE) {
-        nv->deviceVolume --;
-        if (nv->deviceVolume < MIN_DEVICE_VOL)
-          nv->deviceVolume = MIN_DEVICE_VOL;
-        set_rad_vol(nv->deviceVolume);
-        displayInfo();
-        updateLED();
+
+    if(io.digitalRead(SW_VDOWN)){     
+      if (!vdown_pressed) {
+        vdown_pressed = true;
+        vdown_press_time = millis();
+        vdown();
+      } else {
+        if (!vdown_hold) {
+          if (millis() >= (vdown_press_time + initial_press_interval)) {
+            vdown_hold = true;
+            vdown_press_time = millis();
+            vdown();
+          }
+        } else {
+          if (millis() >= (vdown_press_time + press_interval)) {
+            vdown_press_time = millis();
+            vdown();
+          }
+        }
       }
-
+    } else {
+      vdown_hold = false;
+      vdown_pressed = false;
     }
-    if(io.digitalRead(SW_RIGHT)){
-      if (nv->deviceMode == TRACK_MODE) {
-        nv->trackIndex++;
-        if (nv->trackIndex >= (track_count))
-          nv->trackIndex = 0;  //loop back to 0 after last song
-        nv->trackFrame = 0;
-        init_track();
-      } else if (nv->deviceMode == RADIO_MODE) {
-        //delay(1000);  //wait for i2c line to settle 
-        rad_seek(1);
-      }
 
-    }
-    if(io.digitalRead(SW_LEFT)){
-      if (nv->deviceMode == TRACK_MODE) {
-        nv->trackIndex--; 
-        if (nv->trackIndex < 0)
-          nv->trackIndex = track_count-1;  //loop to last song
-        nv->trackFrame = 0;
-        init_track();
-      } else if (nv->deviceMode == RADIO_MODE) {
-        //delay(1000);  //wait for i2c line to settle 
-        rad_seek(0);
-      }
+    if ((nv->deviceMode == TRACK_MODE) && track_play) {
+          if(io.digitalRead(SW_RIGHT)){ 
+            if (!right_pressed) {
+              right_pressed = true;
+              right_press_time = millis();
+              Serial.println("right pressed");
+            } else {
+              uint32_t timer = (ffw_occurred)?(right_press_time + press_interval):(right_press_time + initial_press_interval);
+              if (millis() >= timer) {
+                //fast forward
+                nv->trackFrame += skip_bytes;
+                file->seek(nv->trackFrame, SEEK_SET);
+                right_press_time = millis();
+                ffw_occurred = true;
+              }
+            }
+          }
 
+          //upon release
+          if(!io.digitalRead(SW_RIGHT) && right_pressed){
+            right_pressed = false;
+            if (!ffw_occurred){
+                nv->trackIndex++;
+                if (nv->trackIndex >= (track_count))
+                  nv->trackIndex = 0;  //loop back to 0 after last song
+                nv->trackFrame = 0;
+                init_track();
+                track_play = true;        
+            }
+            ffw_occurred = false;
+          }
+
+          if(io.digitalRead(SW_LEFT)){ 
+            if (!left_pressed) {
+              left_pressed = true;
+              left_press_time = millis();
+              Serial.println("left pressed");
+            } else {
+              uint32_t timer = (rw_occurred)?(left_press_time + press_interval):(left_press_time + initial_press_interval);
+              if (millis() >= timer) {
+                //fast forward
+                if (nv->trackFrame > skip_bytes) nv->trackFrame -= skip_bytes;
+                else nv->trackFrame = 0;
+                file->seek(nv->trackFrame, SEEK_SET);
+                left_press_time = millis();
+                rw_occurred = true;
+              }
+            }
+          }
+
+          //upon release
+          if(!io.digitalRead(SW_LEFT) && left_pressed){
+            left_pressed = false;
+            if (!rw_occurred){
+                nv->trackIndex--; 
+                if (nv->trackIndex < 0)
+                  nv->trackIndex = track_count-1;  //loop to last song
+                nv->trackFrame = 0;
+                init_track();
+                track_play = true;
+            }
+            rw_occurred = false;
+          }
+    
+    //if not currently playing the track (no skipping feature)
+    } else {
+      if(io.digitalRead(SW_RIGHT)){
+        if (nv->deviceMode == TRACK_MODE) {
+          nv->trackIndex++;
+          if (nv->trackIndex >= (track_count))
+            nv->trackIndex = 0;  //loop back to 0 after last song
+          nv->trackFrame = 0;
+          init_track();
+          track_play = true;
+        } else if (nv->deviceMode == RADIO_MODE) {
+          //delay(1000);  //wait for i2c line to settle 
+          rad_seek(1);
+        }
+
+      }
+      if(io.digitalRead(SW_LEFT)){
+        if (nv->deviceMode == TRACK_MODE) {
+          nv->trackIndex--; 
+          if (nv->trackIndex < 0)
+            nv->trackIndex = track_count-1;  //loop to last song
+          nv->trackFrame = 0;
+          init_track();
+          track_play = true;
+        } else if (nv->deviceMode == RADIO_MODE) {
+          //delay(1000);  //wait for i2c line to settle 
+          rad_seek(0);
+        }
+
+      }
     }
     if(io.digitalRead(SW_UP)){
       if (nv->deviceMode == TRACK_MODE) {
@@ -1073,6 +1157,58 @@ void button_tick()
       }
       LED_power_save = true;
     }
+  }
+}
+
+void vup()
+{
+  if (nv->deviceMode == TRACK_MODE) {
+    nv->deviceVolume ++;
+    if (nv->deviceVolume > MAX_DEVICE_VOL)
+      nv->deviceVolume = MAX_DEVICE_VOL;
+    track_gain = track_gain_convert();
+    /*
+    nv->trackFrame = file->getPos();
+    jingle(JINGLE_TICK, track_gain); //play the tick sound  
+    init_track();
+    */
+    out->SetGain(track_gain);
+    Serial.printf("%i (%f)\n", nv->deviceVolume, track_gain);
+    updateLED();
+  } else if (nv->deviceMode == RADIO_MODE) {
+    nv->deviceVolume ++;
+    if (nv->deviceVolume > MAX_DEVICE_VOL)
+      nv->deviceVolume = MAX_DEVICE_VOL;
+
+    set_rad_vol(nv->deviceVolume);
+    displayInfo();
+    updateLED();
+  }
+}
+
+void vdown() 
+{
+  if (nv->deviceMode == TRACK_MODE) {
+    nv->deviceVolume --;
+    if (nv->deviceVolume < MIN_DEVICE_VOL)
+      nv->deviceVolume = MIN_DEVICE_VOL;
+    track_gain = track_gain_convert();
+    /*
+    nv->trackFrame = file->getPos();
+    jingle(JINGLE_TICK, track_gain); //play the tick sound
+    init_track();
+    */
+
+    out->SetGain(track_gain);
+    Serial.printf("%i (%f)\n", nv->deviceVolume, track_gain);
+    updateLED();
+  } else if (nv->deviceMode == RADIO_MODE) {
+    nv->deviceVolume --;
+    if (nv->deviceVolume < MIN_DEVICE_VOL)
+      nv->deviceVolume = MIN_DEVICE_VOL;
+    set_rad_vol(nv->deviceVolume);
+    displayInfo();
+    updateLED();
   }
 }
 
