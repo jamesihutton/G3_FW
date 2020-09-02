@@ -836,9 +836,17 @@ uint32_t left_press_time = 0;
 bool left_pressed = 0;
 bool ffw_occurred = 0;
 bool rw_occurred = 0;
+bool vdown_pressed = 0;
+uint32_t vdown_press_time = 0;
+bool vdown_hold = 0;
+bool vup_pressed = 0;
+uint32_t vup_press_time = 0;
+bool vup_hold = 0;
+
+
 void button_tick()
 {
-  if(!digitalRead(0) || right_pressed || left_pressed){ //if !IO_INT is triggered... read buttons
+  if(!digitalRead(0) || right_pressed || left_pressed || vdown_pressed || vup_pressed){ //if !IO_INT is triggered... read buttons
     
     //bring back LEDs if they faded out
     updateLED();
@@ -847,56 +855,55 @@ void button_tick()
 
     //Serial.println("button pressed");
     io.update_pinData();    //this must be called before reading any pins! (reads them all at once in one command...)
-    if(io.digitalRead(SW_VUP)){
-      if (nv->deviceMode == TRACK_MODE) {
-        nv->deviceVolume ++;
-        if (nv->deviceVolume > MAX_DEVICE_VOL)
-          nv->deviceVolume = MAX_DEVICE_VOL;
-        track_gain = track_gain_convert();
-        /*
-        nv->trackFrame = file->getPos();
-        jingle(JINGLE_TICK, track_gain); //play the tick sound  
-        init_track();
-        */
-        out->SetGain(track_gain);
-        Serial.printf("%i (%f)\n", nv->deviceVolume, track_gain);
-        updateLED();
-      } else if (nv->deviceMode == RADIO_MODE) {
-        nv->deviceVolume ++;
-        if (nv->deviceVolume > MAX_DEVICE_VOL)
-          nv->deviceVolume = MAX_DEVICE_VOL;
-
-        set_rad_vol(nv->deviceVolume);
-        displayInfo();
-        updateLED();
+    
+    
+    if(io.digitalRead(SW_VUP)){     
+      if (!vup_pressed) {
+        vup_pressed = true;
+        vup_press_time = millis();
+        vup();
+      } else {
+        if (!vup_hold) {
+          if (millis() >= (vup_press_time + initial_press_interval)) {
+            vup_hold = true;
+            vup_press_time = millis();
+            vup();
+          }
+        } else {
+          if (millis() >= (vup_press_time + press_interval)) {
+            vup_press_time = millis();
+            vup();
+          }
+        }
       }
-
-
+    } else {
+      vup_hold = false;
+      vup_pressed = false;
     }
-    if(io.digitalRead(SW_VDOWN)){
-      if (nv->deviceMode == TRACK_MODE) {
-        nv->deviceVolume --;
-        if (nv->deviceVolume < MIN_DEVICE_VOL)
-          nv->deviceVolume = MIN_DEVICE_VOL;
-        track_gain = track_gain_convert();
-        /*
-        nv->trackFrame = file->getPos();
-        jingle(JINGLE_TICK, track_gain); //play the tick sound
-        init_track();
-        */
 
-        out->SetGain(track_gain);
-        Serial.printf("%i (%f)\n", nv->deviceVolume, track_gain);
-        updateLED();
-      } else if (nv->deviceMode == RADIO_MODE) {
-        nv->deviceVolume --;
-        if (nv->deviceVolume < MIN_DEVICE_VOL)
-          nv->deviceVolume = MIN_DEVICE_VOL;
-        set_rad_vol(nv->deviceVolume);
-        displayInfo();
-        updateLED();
+
+    if(io.digitalRead(SW_VDOWN)){     
+      if (!vdown_pressed) {
+        vdown_pressed = true;
+        vdown_press_time = millis();
+        vdown();
+      } else {
+        if (!vdown_hold) {
+          if (millis() >= (vdown_press_time + initial_press_interval)) {
+            vdown_hold = true;
+            vdown_press_time = millis();
+            vdown();
+          }
+        } else {
+          if (millis() >= (vdown_press_time + press_interval)) {
+            vdown_press_time = millis();
+            vdown();
+          }
+        }
       }
-
+    } else {
+      vdown_hold = false;
+      vdown_pressed = false;
     }
 
     if ((nv->deviceMode == TRACK_MODE) && track_play) {
@@ -906,7 +913,7 @@ void button_tick()
               right_press_time = millis();
               Serial.println("right pressed");
             } else {
-              uint32_t timer = (ffw_occurred)?(right_press_time + skip_press_interval):(right_press_time + initial_skip_press_interval);
+              uint32_t timer = (ffw_occurred)?(right_press_time + press_interval):(right_press_time + initial_press_interval);
               if (millis() >= timer) {
                 //fast forward
                 nv->trackFrame += skip_bytes;
@@ -937,7 +944,7 @@ void button_tick()
               left_press_time = millis();
               Serial.println("left pressed");
             } else {
-              uint32_t timer = (rw_occurred)?(left_press_time + skip_press_interval):(left_press_time + initial_skip_press_interval);
+              uint32_t timer = (rw_occurred)?(left_press_time + press_interval):(left_press_time + initial_press_interval);
               if (millis() >= timer) {
                 //fast forward
                 if (nv->trackFrame > skip_bytes) nv->trackFrame -= skip_bytes;
@@ -1150,6 +1157,58 @@ void button_tick()
       }
       LED_power_save = true;
     }
+  }
+}
+
+void vup()
+{
+  if (nv->deviceMode == TRACK_MODE) {
+    nv->deviceVolume ++;
+    if (nv->deviceVolume > MAX_DEVICE_VOL)
+      nv->deviceVolume = MAX_DEVICE_VOL;
+    track_gain = track_gain_convert();
+    /*
+    nv->trackFrame = file->getPos();
+    jingle(JINGLE_TICK, track_gain); //play the tick sound  
+    init_track();
+    */
+    out->SetGain(track_gain);
+    Serial.printf("%i (%f)\n", nv->deviceVolume, track_gain);
+    updateLED();
+  } else if (nv->deviceMode == RADIO_MODE) {
+    nv->deviceVolume ++;
+    if (nv->deviceVolume > MAX_DEVICE_VOL)
+      nv->deviceVolume = MAX_DEVICE_VOL;
+
+    set_rad_vol(nv->deviceVolume);
+    displayInfo();
+    updateLED();
+  }
+}
+
+void vdown() 
+{
+  if (nv->deviceMode == TRACK_MODE) {
+    nv->deviceVolume --;
+    if (nv->deviceVolume < MIN_DEVICE_VOL)
+      nv->deviceVolume = MIN_DEVICE_VOL;
+    track_gain = track_gain_convert();
+    /*
+    nv->trackFrame = file->getPos();
+    jingle(JINGLE_TICK, track_gain); //play the tick sound
+    init_track();
+    */
+
+    out->SetGain(track_gain);
+    Serial.printf("%i (%f)\n", nv->deviceVolume, track_gain);
+    updateLED();
+  } else if (nv->deviceMode == RADIO_MODE) {
+    nv->deviceVolume --;
+    if (nv->deviceVolume < MIN_DEVICE_VOL)
+      nv->deviceVolume = MIN_DEVICE_VOL;
+    set_rad_vol(nv->deviceVolume);
+    displayInfo();
+    updateLED();
   }
 }
 
