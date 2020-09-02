@@ -34,8 +34,9 @@
 
 #define			PAUSED_POWER_DOWN_TIMER	240000	//turn off after this much time when paused
 
-
-
+#define 		initial_ffw_press_interval		500
+#define 		ffw_press_interval		200		//skip forward every 200ms held down
+#define			ffw_bytes				50000	//bytes in file to ffw each skip
 
 bool latchPower();
 void button_tick();

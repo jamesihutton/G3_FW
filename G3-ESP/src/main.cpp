@@ -830,9 +830,14 @@ void track_tick()
 }
 
 int LED_fade_timer = LED_FADEOUT_TIME;
+int check_again = 0; //always check once more after activity
+uint32_t right_press_time = 0;
+bool right_pressed = 0;
+bool ffw_occurred = 0;
 void button_tick()
 {
-  if(!digitalRead(0)){ //if !IO_INT is triggered... read buttons
+  if(!digitalRead(0) || right_pressed){ //if !IO_INT is triggered... read buttons
+    
     //bring back LEDs if they faded out
     updateLED();
     LED_power_save = false;
@@ -891,18 +896,40 @@ void button_tick()
       }
 
     }
-    if(io.digitalRead(SW_RIGHT)){
-      if (nv->deviceMode == TRACK_MODE) {
-        nv->trackIndex++;
-        if (nv->trackIndex >= (track_count))
-          nv->trackIndex = 0;  //loop back to 0 after last song
-        nv->trackFrame = 0;
-        init_track();
-      } else if (nv->deviceMode == RADIO_MODE) {
-        //delay(1000);  //wait for i2c line to settle 
-        rad_seek(1);
-      }
 
+    if(io.digitalRead(SW_RIGHT)){ 
+      if (!right_pressed) {
+        right_pressed = true;
+        right_press_time = millis();
+        Serial.println("right pressed");
+      } else {
+        uint32_t timer = (ffw_occurred)?(right_press_time + ffw_press_interval):(right_press_time + initial_ffw_press_interval);
+        if (millis() >= timer) {
+          //fast forward
+          nv->trackFrame += ffw_bytes;
+          file->seek(nv->trackFrame, SEEK_SET);
+          right_press_time = millis();
+          ffw_occurred = true;
+        }
+      }
+    }
+
+    //upon release
+    if(!io.digitalRead(SW_RIGHT) && right_pressed){
+      right_pressed = false;
+      if (!ffw_occurred){
+        if (nv->deviceMode == TRACK_MODE) {
+          nv->trackIndex++;
+          if (nv->trackIndex >= (track_count))
+            nv->trackIndex = 0;  //loop back to 0 after last song
+          nv->trackFrame = 0;
+          init_track();
+        } else if (nv->deviceMode == RADIO_MODE) {
+          //delay(1000);  //wait for i2c line to settle 
+          rad_seek(1);
+        }
+      }
+      ffw_occurred = false;
     }
     if(io.digitalRead(SW_LEFT)){
       if (nv->deviceMode == TRACK_MODE) {
