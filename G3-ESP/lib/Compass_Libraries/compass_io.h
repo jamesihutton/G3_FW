@@ -17,7 +17,7 @@
 
 //----------------- PIN NAMES --------------------------------
 #define			MUX_SEL				0
-#define			USB_SD_RAD_RST		1
+#define			RAD_SD_POW			1
 #define			SW_MODE				2
 #define			SW_Q				3
 #define			LED1				4
