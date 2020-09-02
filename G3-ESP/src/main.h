@@ -8,7 +8,7 @@
 #include <Arduino.h>
 
 /////////////////////////////////
-#define 	FW_REV				"2020-08-10"
+#define 	FW_REV				"2020-09-02"
 
 #define 	ADC_PIN_USBVCC		0	
 #define 	ADC_PIN_CHRG		1		
