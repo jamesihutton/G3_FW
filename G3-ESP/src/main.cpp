@@ -237,20 +237,10 @@ bool init_radio()
   
   //RESET radio (and SD card...)
   SD.end();
-  io.digitalWrite(USB_SD_RAD_RST, LOW);
-  delay(10);
-  io.digitalWrite(USB_SD_RAD_RST, HIGH);
-
-  int resp = SD.begin(SD_CS, SPI_SPEED); //SD card must now be restarted, since doing this toggled it's power
-  if (!resp) {
-    while(1){
-      Serial.println("\n\nCould not connect to SD card\n\n");
-     io.setAllLEDs(1);
-     delay(400);
-     io.setAllLEDs(0);
-     delay(400);
-    }
-  } 
+  io.digitalWrite(RAD_SD_POW, LOW);
+  delay(100);
+  io.digitalWrite(RAD_SD_POW, HIGH);
+  delay(100);
 
   Wire.begin(SDIO, SCLK);  //SDA, SCL
 
@@ -528,7 +518,20 @@ void switch_mode_track()
   delay(150);  
   powerdown_radio();
 
-  SD.begin(SD_CS, SPI_SPEED); 
+  io.digitalWrite(RAD_SD_POW, LOW);
+  delay(10);
+
+  int resp = SD.begin(SD_CS, SPI_SPEED); //SD card must now be restarted, since doing this toggled it's power
+  if (!resp) {
+    while(1){
+      Serial.println("\n\nCould not connect to SD card\n\n");
+     io.setAllLEDs(1);
+     delay(400);
+     io.setAllLEDs(0);
+     delay(400);
+    }
+  } 
+
   nv->deviceMode = TRACK_MODE;
   radio_play = false;
   track_play = true;
@@ -632,9 +635,9 @@ void setup()
   WiFi.forceSleepBegin(); //<-- saves like 100mA!
 
   //RESET SD card
-  io.digitalWrite(USB_SD_RAD_RST, LOW);
+  io.digitalWrite(RAD_SD_POW, HIGH);
   delay(100);
-  io.digitalWrite(USB_SD_RAD_RST, HIGH);
+  io.digitalWrite(RAD_SD_POW, LOW);
 
 
   int resp = SD.begin(SD_CS, SPI_SPEED); 
@@ -693,9 +696,9 @@ void device_init()
   WiFi.forceSleepBegin(); //<-- saves like 100mA!
 
   //RESET SD card
-  io.digitalWrite(USB_SD_RAD_RST, LOW);
+  io.digitalWrite(RAD_SD_POW, HIGH);
   delay(100);
-  io.digitalWrite(USB_SD_RAD_RST, HIGH);
+  io.digitalWrite(RAD_SD_POW, LOW);
 
 
   int resp = SD.begin(SD_CS, SPI_SPEED); 
@@ -1093,22 +1096,14 @@ void readSD()
   //orient USB MUX from serial to SD
   io.digitalWrite(MUX_SEL, HIGH);
   //RESET SD card and SD reader
-  io.digitalWrite(USB_SD_RAD_RST, LOW);
+  io.digitalWrite(RAD_SD_POW, HIGH);
   delay(1000);
-  io.digitalWrite(USB_SD_RAD_RST, HIGH);
+  io.digitalWrite(RAD_SD_POW, LOW);
 
-  //loop until SW_POW is pressed (should reset ESP though when MUX_SEL goes low and triggers FTDI...)
+  //loop forever
   while(1){
     delay(100);
-    io.update_pinData();
-    if (io.digitalRead(SW_Q)){
-      io.digitalWrite(MUX_SEL, LOW);    //this will reset the ESP...
-      //RESET SD card and SD reader
-      io.digitalWrite(USB_SD_RAD_RST, LOW);   //not reached...
-      delay(100);
-      io.digitalWrite(USB_SD_RAD_RST, HIGH);
-      return;
-    }
+    
   }
 }
 
@@ -1148,6 +1143,14 @@ AudioOutputI2S *out_progmem;
 
 void jingle(int id, float gain)
 {
+  //check state of UDA power
+  bool uda_state = io.get_pinState(RAD_SD_POW);
+  
+  //ensure UDA is on
+  io.digitalWrite(RAD_SD_POW, LOW); //(this will reset the radio if playing...)
+
+
+
   mute_amp();
   delay(PRE_MUTE_MS);
   audioLogger = &Serial;
@@ -1199,6 +1202,9 @@ void jingle(int id, float gain)
       if (!wav_progmem->loop()){
         mute_amp();
         wav_progmem->stop();
+
+        //turn back off UDA if it was off before
+        if (uda_state) io.digitalWrite (RAD_SD_POW, HIGH);
         return;
       }
       ESP.wdtFeed();
@@ -1322,9 +1328,12 @@ void handle_wakeup()
 //(unless power button is pressed)
 void charging_loop()
 {
+  
   io.init();
   io.setAllLEDs(0);
   int vcc;
+  mute_amp();
+  io.digitalWrite(RAD_SD_POW, HIGH);
   while(1){
     adc_print_all(); //for debugging
 
