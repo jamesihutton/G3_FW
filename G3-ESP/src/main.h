@@ -36,7 +36,7 @@
 
 #define 		initial_press_interval	500
 #define 		press_interval			200		//skip forward every 200ms held down
-#define			skip_bytes				50000	//bytes in file to skip each skip
+#define			skip_bytes				120000	//bytes in file to skip each skip
 
 bool latchPower();
 void button_tick();
