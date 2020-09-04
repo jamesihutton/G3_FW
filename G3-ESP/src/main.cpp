@@ -236,7 +236,7 @@ bool init_radio()
   mute_amp();   //mute during init to avoid pops
   
   //RESET radio (and SD card...)
-  SD.end();
+  //SD.end();
   io.digitalWrite(RAD_SD_POW, LOW);
   delay(100);
   io.digitalWrite(RAD_SD_POW, HIGH);
@@ -667,9 +667,9 @@ void setup()
     track_play = true;
   } else if (nv->deviceMode == RADIO_MODE) {
     Serial.println("INIT RADIO");
-    init_radio();
     listFolders();
     listFiles();
+    init_radio();
     radio_play = true;
   }
 
@@ -727,9 +727,9 @@ void device_init()
     track_play = true;
   } else if (nv->deviceMode == RADIO_MODE) {
     Serial.println("INIT RADIO");
-    init_radio();
     listFolders();
     listFiles();
+    init_radio();
     radio_play = true;
   }
 
