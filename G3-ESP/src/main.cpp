@@ -1469,7 +1469,7 @@ void charging_loop()
   io.setAllLEDs(0);
   int vcc;
   mute_amp();
-  io.digitalWrite(RAD_SD_POW, HIGH);
+  io.digitalWrite(RAD_SD_POW, 0);
   while(1){
     adc_print_all(); //for debugging
 
@@ -1490,6 +1490,8 @@ void charging_loop()
     int i;
     for (i = 1; i<5; i++) {io.pwm(i,0);} //turn all the LEDs off
     for (i = 1; i<breathing_LED; i++) {io.pwm(i, 255);}  //turn on the ones below breathing
+    mute_amp(); //mute amp to avoid PWM humming
+    delay(10);
     for (i=0; i<255; i++) {
       //adjust pwm
       io.pwm(breathing_LED, i); 
@@ -1515,7 +1517,8 @@ void charging_loop()
         powerDown_device();
       }
     }
-    
+    mute_amp(); //mute amp to avoid PWM humming
+    delay(10);
     for (i=254; i>=0; i--) {
       //adjust pwm
       io.pwm(breathing_LED, i); 
