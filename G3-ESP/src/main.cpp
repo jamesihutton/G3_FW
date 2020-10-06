@@ -683,6 +683,7 @@ void device_init()
   Serial.println("power - up jingle");
   //play power up jingle
   jingle(JINGLE_POWER_UP, 0.1);       //takes ~2 seconds
+  
 
 
 
