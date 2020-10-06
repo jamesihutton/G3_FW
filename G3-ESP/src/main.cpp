@@ -620,7 +620,7 @@ void setup()
 
   Serial.println("power - up jingle");
   //play power up jingle
-  jingle(JINGLE_POWER_UP, 0.10);       //takes ~2 seconds
+  jingle(JINGLE_POWER_UP, 0.5);       //takes ~2 seconds
 
 
 
@@ -682,8 +682,7 @@ void device_init()
 {
   Serial.println("power - up jingle");
   //play power up jingle
-  jingle(JINGLE_POWER_UP, 0.1);       //takes ~2 seconds
-  
+  jingle(JINGLE_POWER_UP, 0.5);       //takes ~2 seconds
 
 
 
@@ -1108,7 +1107,7 @@ void button_tick()
       //SD.end();
 
       //play power down jingle
-      jingle(JINGLE_POWER_DOWN, 0.1);
+      jingle(JINGLE_POWER_DOWN, 0.5);
 
       //Check if USB is plugged in
       adc_set(ADC_PIN_USBVCC);
@@ -1295,7 +1294,7 @@ void jingle(int id, float gain)
   {
     case JINGLE_POWER_UP:
       file_progmem = new AudioFileSourcePROGMEM(power_up, sizeof(power_up));
-      delay(300); //engine needs to warm up a bit...
+      delay(500); //engine needs to warm up a bit...
       break;
 
     case JINGLE_POWER_DOWN:
@@ -1741,7 +1740,7 @@ void LV_handle()
   //SD.end();
 
   //play power down jingle
-  jingle(JINGLE_POWER_DOWN, 0.1);       //takes ~2 seconds
+  jingle(JINGLE_POWER_DOWN, 0.5);       //takes ~2 seconds
 
   //safely end SPIFFS
   nv->close();
