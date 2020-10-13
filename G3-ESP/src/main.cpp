@@ -736,7 +736,8 @@ void device_init()
   updateLED();
 }
 
-
+bool vup_pressed = 0;
+bool vdown_pressed = 0;
 
 int mute = 0;
 int ms = 0;
@@ -761,7 +762,8 @@ void loop()
 
   if (!(ms%5)){
     button_tick();
-    if(nv->deviceMode == RADIO_MODE)
+    //don't sleep while volume buttons are pressed to allow for volume holding
+    if((nv->deviceMode == RADIO_MODE) && !(vup_pressed || vdown_pressed))
       radio_sleep_tick();
 
     //pause checker
@@ -836,10 +838,8 @@ uint32_t left_press_time = 0;
 bool left_pressed = 0;
 bool ffw_occurred = 0;
 bool rw_occurred = 0;
-bool vdown_pressed = 0;
 uint32_t vdown_press_time = 0;
 bool vdown_hold = 0;
-bool vup_pressed = 0;
 uint32_t vup_press_time = 0;
 bool vup_hold = 0;
 
