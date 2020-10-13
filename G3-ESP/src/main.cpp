@@ -233,6 +233,7 @@ void init_track()
 
 bool init_radio()
 {
+  int delay_ms = 5; //some commands aren't sent through without a delay
   mute_amp();   //mute during init to avoid pops
   
   //RESET radio (and SD card...)
@@ -250,7 +251,7 @@ bool init_radio()
   Wire.write(B00010000);  //0x10 //external crystal
   Wire.write(0x05);  //0x05
   if(Wire.endTransmission()) return 0;  //NACK... failed to connect
-
+  delay(delay_ms);
   
   Wire.beginTransmission(fm_addr);
   Wire.write(0x12);  //0x12
@@ -260,6 +261,7 @@ bool init_radio()
   Wire.write(0x00);  //0x00
   Wire.write(0x00);  //0x03   //3dB
   Wire.endTransmission();
+  delay(delay_ms);
 
   Wire.beginTransmission(fm_addr);
   Wire.write(0x12);  //0x12
@@ -269,6 +271,7 @@ bool init_radio()
   Wire.write(0x00);  //0x00
   Wire.write(0x00);  //0x00
   Wire.endTransmission();
+  delay(delay_ms);
 
 
   Wire.beginTransmission(fm_addr);
@@ -279,7 +282,7 @@ bool init_radio()
   Wire.write(0x00);
   Wire.write(0x14);  //tune_error to 20kHz (best seek performance)
   Wire.endTransmission();
-  delay(100);
+  delay(delay_ms);
   Wire.beginTransmission(fm_addr);
   Wire.write(0x12);  
   Wire.write(0x00);  
@@ -288,7 +291,7 @@ bool init_radio()
   Wire.write(0x00);  
   Wire.write(0x03);  //set seek SNR thresh in dB (default was 3 dB)
   Wire.endTransmission();
-  delay(100);
+  delay(delay_ms);
   Wire.beginTransmission(fm_addr);
   Wire.write(0x12);  
   Wire.write(0x00);  
@@ -297,7 +300,7 @@ bool init_radio()
   Wire.write(0x00);  
   Wire.write(0x15);  //set seek RSSI thresh in dBuV (default was 20 dBuV)
   Wire.endTransmission();
-  delay(100);
+  delay(delay_ms);
 
   ///////////////////////////////////
   Wire.beginTransmission(fm_addr);
@@ -308,7 +311,7 @@ bool init_radio()
   Wire.write(0x00);
   Wire.write(0x8F);  //FM_RSQ_INT_SOURCE
   Wire.endTransmission();
-  delay(100);
+  delay(delay_ms);
 
   Wire.beginTransmission(fm_addr);
   Wire.write(0x12);  
@@ -317,7 +320,7 @@ bool init_radio()
   Wire.write(0x01);  
   Wire.write(0x00);
   Wire.write(0x1E);  //FM_RSQ_SNR_HI_THRESHOLD
-  delay(100);
+  delay(delay_ms);
 
   Wire.beginTransmission(fm_addr);
   Wire.write(0x12);  
@@ -326,7 +329,7 @@ bool init_radio()
   Wire.write(0x02);  
   Wire.write(0x00);
   Wire.write(0x06);  //FM_RSQ_SNR_LO_THRESHOLD
-  delay(100);
+  delay(delay_ms);
 
   Wire.beginTransmission(fm_addr);
   Wire.write(0x12);  
@@ -335,7 +338,7 @@ bool init_radio()
   Wire.write(0x03);  
   Wire.write(0x00);
   Wire.write(0x32);  //FM_RSQ_RSSI_HI_THRESHOLD
-  delay(100);
+  delay(delay_ms);
 
   Wire.beginTransmission(fm_addr);
   Wire.write(0x12);  
@@ -344,7 +347,7 @@ bool init_radio()
   Wire.write(0x04);  
   Wire.write(0x00);
   Wire.write(0x18);  //FM_RSQ_RSSI_LO_THRESHOLD
-  delay(100);
+  delay(delay_ms);
 
   Wire.beginTransmission(fm_addr);
   Wire.write(0x12);  
@@ -353,7 +356,7 @@ bool init_radio()
   Wire.write(0x00);  
   Wire.write(0x22);
   Wire.write(0x56);  //FM_SEEK_BAND_BOTTOM (8790)
-  delay(100);
+  delay(delay_ms);
   ///////////////////////////////////
 
   /*
@@ -492,7 +495,8 @@ int powerdown_radio()
 void switch_mode_radio()
 {
   Serial.println("switching to radio mode");
-
+  mute_amp();
+  delay(150);
   if(init_radio()) {
     Serial.println("Radio initted...");
     track_play = false;
