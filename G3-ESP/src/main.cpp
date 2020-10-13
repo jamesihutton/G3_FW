@@ -238,9 +238,9 @@ bool init_radio()
   //RESET radio (and SD card...)
   //SD.end();
   io.digitalWrite(RAD_SD_POW, LOW);
-  delay(100);
+  delay(10);
   io.digitalWrite(RAD_SD_POW, HIGH);
-  delay(100);
+  delay(10);
 
   Wire.begin(SDIO, SCLK);  //SDA, SCL
 
@@ -621,7 +621,6 @@ void setup()
   Serial.println("power - up jingle");
   //play power up jingle
   jingle(JINGLE_POWER_UP, 0.5);       //takes ~2 seconds
-
 
 
   io.update_pinData();
@@ -1109,10 +1108,16 @@ void button_tick()
       //play power down jingle
       jingle(JINGLE_POWER_DOWN, 0.5);
 
+      mute_amp();
+      io.digitalWrite(RAD_SD_POW, LOW);
+      delay(100);
+        
       //Check if USB is plugged in
       adc_set(ADC_PIN_USBVCC);
-      delay(100);
-      if (adc_get(ADC_PIN_USBVCC) > 4500) {
+      delay(1);
+      int x = adc_get(ADC_PIN_USBVCC);
+      mute_amp();
+      if (x > 4500) {
         
         Serial.println("charging loop");
         charging_loop();
@@ -1337,10 +1342,14 @@ void jingle(int id, float gain)
       }
       if (!wav_progmem->loop()){
         mute_amp();
+        delay(200);
         wav_progmem->stop();
 
         //turn back off UDA if it was off before
-        if (uda_state) io.digitalWrite (RAD_SD_POW, HIGH);
+        if (uda_state) {
+          delay(200); //to avoid hiss... can probably remove on next board rev
+          io.digitalWrite (RAD_SD_POW, HIGH);
+        }
         return;
       }
       ESP.wdtFeed();
@@ -1371,8 +1380,6 @@ void jingle(int id, float gain)
         io.pwm(i, map(185-anim[i], 0, 185, 0, 254));
     }
   }
-
-  //mute amp for "MUTE_MS" milliseconds into track (to avoid "click")
 }
 
 
@@ -1393,7 +1400,7 @@ void adc_set(int pin)
   (!!(pin & 0b0010)) ? (SCL_HIGH(SCLK)) : (SCL_LOW(SCLK));
   (!!(pin & 0b0100)) ? (digitalWrite(16, HIGH)) : (digitalWrite(16, LOW));
   
-  //STILL NEED TO ADD 3RD CONTROL LINE...
+  
 
 }
 
@@ -1470,6 +1477,7 @@ void charging_loop()
   int vcc;
   mute_amp();
   io.digitalWrite(RAD_SD_POW, 0);
+  delay(100);
   while(1){
     adc_print_all(); //for debugging
 
