@@ -741,6 +741,7 @@ void device_init()
 
 bool vup_pressed = 0;
 bool vdown_pressed = 0;
+bool q_pressed = false;
 
 int mute = 0;
 int ms = 0;
@@ -766,7 +767,7 @@ void loop()
   if (!(ms%5)){
     button_tick();
     //don't sleep while volume buttons are pressed to allow for volume holding
-    if((nv->deviceMode == RADIO_MODE) && !(vup_pressed || vdown_pressed))
+    if((nv->deviceMode == RADIO_MODE) && !(vup_pressed || vdown_pressed || q_pressed))
       radio_sleep_tick();
 
     //pause checker
@@ -845,11 +846,12 @@ uint32_t vdown_press_time = 0;
 bool vdown_hold = 0;
 uint32_t vup_press_time = 0;
 bool vup_hold = 0;
+uint32_t q_press_time = 0;
 
 
 void button_tick()
 {
-  if(!digitalRead(0) || right_pressed || left_pressed || vdown_pressed || vup_pressed){ //if !IO_INT is triggered... read buttons
+  if(!digitalRead(0) || right_pressed || left_pressed || vdown_pressed || vup_pressed || q_pressed){ //if !IO_INT is triggered... read buttons
     
     //bring back LEDs if they faded out
     updateLED();
@@ -1072,22 +1074,40 @@ void button_tick()
     }
 
     if(io.digitalRead(SW_Q)){
-      //feature not yet enabled...
+      if (!q_pressed) {
+        q_pressed = true;
+        q_press_time = millis();
+        //press feature not yet enabled...
+      } else {
+        if(millis() >= (q_press_time + initial_press_interval)) {
+          // Serial.println("Q held");
+          adc_set(ADC_PIN_VCC);
+          delay(10);
+          uint8_t vcc_led_cnt = vccToLEDCount(adc_get(ADC_PIN_VCC));
 
+          uint8_t i;
+          unsigned long start_time;
+          for (int j = 0; j<BATT_BLINK_COUNT; j++){
+            for (i = 1; i<=LED_COUNT; i++) {io.pwm(i,0);} //turn all the LEDs off
+            start_time = millis();
+            while(millis() <= start_time + HALF_BLINK_TIME){
+              track_tick(); //keep track running
+              delay(1);
+            }
+            for (i = 1; i<=vcc_led_cnt; i++) {io.pwm(i, LED_BRIGHTNESS);}  //turn on up to count
+            start_time = millis();
+            while(millis() <= start_time + HALF_BLINK_TIME){
+              track_tick(); //keep track running
+              delay(1);
+            }
+          }
 
-      /*
-      //update track frame last second...
-      nv->trackFrame = file->getPos();
-
-      //set all the params in nonVol memory 
-      nv->save();
-
-      //safely end SPIFFS
-      nv.close();
-      
-      readSD();
-      */
-      
+          updateLED(); //show volume LEDs
+          q_pressed = false;
+        }
+      }      
+    } else {
+      q_pressed = false;
     }
 
     if(io.digitalRead(SW_POW)){
@@ -1154,7 +1174,7 @@ void button_tick()
     if ((millis() >= LED_fade_timer) && !LED_power_save) {
       Serial.println("fade leds");
       io.pwm(1, 0); io.pwm(2, 0); io.pwm(3, 0); io.pwm(4, 0); 
-      for (int i = 254; i>=0; i--){ 
+      for (int i = LED_BRIGHTNESS-1; i>=0; i--){ 
         if (nv->deviceVolume>=0)   io.pwm(1, i);
         if (nv->deviceVolume>=4)   io.pwm(2, i);
         if (nv->deviceVolume>=8)   io.pwm(3, i);
@@ -1257,16 +1277,16 @@ void readSD()
 void updateLED(){
   io.pwm(1, 0); io.pwm(2, 0); io.pwm(3, 0); io.pwm(4, 0); //switched to using PWM, but check power consumption...
   if (nv->deviceVolume>=0) {
-    io.pwm(1, 255);
+    io.pwm(1, LED_BRIGHTNESS);
   }
   if (nv->deviceVolume>=4) {
-    io.pwm(2, 255);
+    io.pwm(2, LED_BRIGHTNESS);
   }
   if (nv->deviceVolume>=8) {
-    io.pwm(3, 255);
+    io.pwm(3, LED_BRIGHTNESS);
   }
   if (nv->deviceVolume>=12) {
-    io.pwm(4, 255);
+    io.pwm(4, LED_BRIGHTNESS);
   }
 }
 
@@ -1489,22 +1509,17 @@ void charging_loop()
     adc_set(ADC_PIN_VCC);
     delay(10);
     vcc = adc_get(ADC_PIN_VCC);
-    int percent = vccToPercent(vcc);
+    uint8_t percent = vccToPercent(vcc);
     Serial.printf("vcc = %i \t(%i percent)\n", vcc, percent);
     //animate LEDs accordingly (switch this to builtin fade eventually...)
-    int breathing_LED = 1;
-    if (percent == 100) breathing_LED = 5;    //doesn't exist... so wont do anything ;)
-    else if (percent >= 75) breathing_LED = 4;
-    else if (percent >= 50) breathing_LED = 3;
-    else if (percent >= 25) breathing_LED = 2;
-    else                    breathing_LED = 1;
+    int breathing_LED = percentToLEDCount(percent);
 
     int i;
     for (i = 1; i<5; i++) {io.pwm(i,0);} //turn all the LEDs off
-    for (i = 1; i<breathing_LED; i++) {io.pwm(i, 255);}  //turn on the ones below breathing
+    for (i = 1; i<breathing_LED; i++) {io.pwm(i, LED_BRIGHTNESS);}  //turn on the ones below breathing
     mute_amp(); //mute amp to avoid PWM humming
     delay(10);
-    for (i=0; i<255; i++) {
+    for (i=0; i<LED_BRIGHTNESS; i++) {
       //adjust pwm
       io.pwm(breathing_LED, i); 
       //check if POW was pressed
@@ -1531,7 +1546,7 @@ void charging_loop()
     }
     mute_amp(); //mute amp to avoid PWM humming
     delay(10);
-    for (i=254; i>=0; i--) {
+    for (i=LED_BRIGHTNESS-1; i>=0; i--) {
       //adjust pwm
       io.pwm(breathing_LED, i); 
       //check if POW was pressed
@@ -1564,6 +1579,19 @@ uint8_t vccToPercent(int vcc)
   else                 return 0;
 }
 
+uint8_t percentToLEDCount(uint8_t percent){
+  uint8_t LEDCount = 0;
+  if (percent == 100) LEDCount = 5;    //doesn't exist... so wont do anything ;)
+  else if (percent >= 75) LEDCount = 4;
+  else if (percent >= 50) LEDCount = 3;
+  else if (percent >= 25) LEDCount = 2;
+  else                    LEDCount = 1;
+  return LEDCount;
+}
+
+uint8_t vccToLEDCount(int vcc){
+  return percentToLEDCount(vccToPercent(vcc));
+}
 
 //in certain modes (whenever not playing a track) device should go into light sleep periodically
 void radio_sleep_tick()
@@ -1652,7 +1680,7 @@ void radio_sleep_tick()
     if (!LED_power_save){
       Serial.println("fade leds");
       io.pwm(1, 0); io.pwm(2, 0); io.pwm(3, 0); io.pwm(4, 0); 
-      for (int i = 254; i>=0; i--){ 
+      for (int i = LED_BRIGHTNESS-1; i>=0; i--){ 
         if (nv->deviceVolume>=0)   io.pwm(1, i);
         if (nv->deviceVolume>=4)   io.pwm(2, i);
         if (nv->deviceVolume>=8)   io.pwm(3, i);

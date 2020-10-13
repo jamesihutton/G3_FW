@@ -38,6 +38,12 @@
 #define 		press_interval			200		//skip forward every 200ms held down
 #define			skip_bytes				120000	//bytes in file to skip each skip
 
+#define			LED_COUNT				4 		//number of LEDs
+#define			HALF_BLINK_TIME			500		//half delay between blink
+#define			BLINK_TIME				(HALF_BLINK_TIME*2)	//half delay between blink
+#define			LED_BRIGHTNESS			255		//brightness of LEDs uring pwm
+#define			BATT_BLINK_COUNT		4 		// number of times to blink when showing battery level
+
 bool latchPower();
 void button_tick();
 void vup();
@@ -64,6 +70,8 @@ void adc_print_all();
 void handle_wakeup();
 void charging_loop();
 uint8_t vccToPercent(int vcc);
+uint8_t percentToLEDCount(uint8_t percent);
+uint8_t vccToLEDCount(int vcc);
 
 void radio_sleep_tick();
 void wakeup_cb();
