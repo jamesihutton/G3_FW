@@ -31,7 +31,7 @@
 #define TRACK_MODE 0
 #define RADIO_MODE 1
 
-#define   MUTE_RADIO_MS   1  //amount of ms to mute amp when switching to radio mode (to avoid pop)
+#define   MUTE_RADIO_MS   50  //amount of ms to mute amp when switching to radio mode (to avoid pop)
 
 
 #endif
